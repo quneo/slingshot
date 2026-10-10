@@ -129,9 +129,11 @@ export function ResultPanel() {
       </div>
       <p className="mx-auto mt-1 max-w-[520px] text-[13px] text-ink-2 sm:text-[13.5px]">
         {outcome.success
-          ? assists.length > 0
-            ? `Гравитация ${assists.length > 1 ? 'планет' : 'планеты'} изменила скорость на ${freeGain.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/с — без топлива.`
-            : 'Импульс рассчитан точно.'
+          ? level.target.kind === 'rendezvous' && fc?.result.arrival
+            ? `Встреча состоялась: разница скоростей всего ${kmsNumber(fc.result.arrival.relSpeed)} км/с.`
+            : assists.length > 0
+              ? `Гравитация ${assists.length > 1 ? 'планет' : 'планеты'} изменила скорость на ${freeGain.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/с — без топлива.`
+              : 'Импульс рассчитан точно.'
           : verdict.detail}
       </p>
     </div>
