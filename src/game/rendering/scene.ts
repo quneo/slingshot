@@ -37,6 +37,7 @@ export interface Hover {
 }
 
 export interface MenuMarker {
+  levelId: string
   levelNumber: number
   bodyId: BodyId
   locked: boolean
@@ -75,7 +76,8 @@ export interface SceneHits {
   path: ScreenPath | null
   nodes: { id: string; x: number; y: number }[]
   handle: { id: string; ox: number; oy: number; tx: number; ty: number; px: number; py: number } | null
-  planets: { id: BodyId; x: number; y: number; r: number }[]
+  /** planets, and on the campaign map also mission badges (with their level id) */
+  planets: { id: string; x: number; y: number; r: number }[]
   ship: { x: number; y: number; r: number } | null
 }
 
@@ -790,7 +792,7 @@ export class Scene {
         ctx.fillStyle = s < m.stars ? COLORS.gold : 'rgba(169, 188, 213, 0.3)'
         ctx.fill()
       }
-      this.hits.planets.push({ id: m.bodyId, x, y, r: 16 })
+      this.hits.planets.unshift({ id: m.levelId, x, y, r: 16 })
     }
   }
 }

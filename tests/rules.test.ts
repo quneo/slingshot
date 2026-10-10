@@ -51,6 +51,18 @@ describe('slingshot levels explain misses through the helper planet', () => {
   })
 })
 
+describe('flying into the helper planet', () => {
+  it('L3: a collision with Colossus comes with a launch-date tip', () => {
+    const level = getLevel('L3')
+    const res = predict(1, level.id, { launchTime: fromDays(175), launch: { prograde: 0.205, radial: 0 }, nodes: [] })
+    expect(res.outcome.failure).toBe('collision')
+    expect(res.outcome.collisionBody).toBe('colossus')
+    const helper = res.outcome.miss?.assist?.miss
+    expect(helper?.kind).toBe('timing')
+    if (helper?.kind === 'timing') expect(helper.launchShift).not.toBeNull()
+  })
+})
+
 describe('store edits respect the rules', () => {
   beforeEach(() => {
     useGame.getState().startLevel('L3')

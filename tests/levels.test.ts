@@ -103,6 +103,17 @@ describe('rendezvous goal (L6)', () => {
     expect(res.result.fastPass!.relSpeed).toBeGreaterThan(level.target.maxRelSpeed!)
   })
 
+  it('the reported mismatch follows the matching burn (slowest pass through the ring)', () => {
+    const level = getLevel('L6')
+    const withBurn = (dv: number) =>
+      run(level, { ...level.solution, nodes: [{ ...level.solution.nodes[0], prograde: dv }] }).outcome
+    const weak = withBurn(0.005)
+    const stronger = withBurn(0.02)
+    expect(weak.failure).toBe('too-fast')
+    expect(stronger.failure).toBe('too-fast')
+    expect(stronger.fastPass!.relSpeed).toBeLessThan(weak.fastPass!.relSpeed)
+  })
+
   it('the matching burn makes it one, with a small relative speed at arrival', () => {
     const level = getLevel('L6')
     const res = run(level, level.solution)

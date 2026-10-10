@@ -145,9 +145,12 @@ export function GameCanvas() {
           onGestureStart: () => useGame.getState().beginGesture(),
           onGestureEnd: () => useGame.getState().endGesture(),
           planetsInteractive: () => useGame.getState().screen === 'menu',
-          onTapPlanet: (id) => {
-            const entry = Object.entries(MENU_TARGETS).find(([, body]) => body === id)
-            if (entry) useGame.getState().selectMenuLevel(entry[0])
+          onTapPlanet: (key) => {
+            // a mission badge carries its level id; a bare planet opens the first mission that targets it
+            const levelId = LEVELS.some((l) => l.id === key)
+              ? key
+              : Object.entries(MENU_TARGETS).find(([, body]) => body === key)?.[0]
+            if (levelId) useGame.getState().selectMenuLevel(levelId)
           },
         })
 
@@ -272,6 +275,7 @@ export function GameCanvas() {
           if (s.screen === 'menu') {
             if (!calm) menuTime += dt * 0.12
             const markers: MenuMarker[] = LEVELS.map((l) => ({
+              levelId: l.id,
               levelNumber: l.number,
               bodyId: MENU_TARGETS[l.id],
               locked: !isUnlocked(s.save, l.id),
@@ -319,7 +323,8 @@ export function GameCanvas() {
                 thrust = thrustAt(fc, level, time)
                 if (s.phase === 'flight') steerFlightCamera(s.flight.camera, fc, level, time)
               }
-              cameraMode = s.phase === 'flight' ? s.flight.camera : ''
+              // read the store again: steering may have just switched the mode (manual takeover)
+              cameraMode = s.phase === 'flight' ? useGame.getState().flight.camera : ''
             } else {
               cameraMode = ''
             }

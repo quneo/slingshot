@@ -102,7 +102,7 @@ export interface PropagationResult {
   closest: (ApproachPoint | null)[]
   arrival: ApproachPoint | null
   collision: (ApproachPoint & { bodyIndex: number }) | null
-  /** rendezvous goals: first time the ship crossed the zone too fast */
+  /** rendezvous goals: the slowest moment the ship was inside the zone, still too fast */
   fastPass: ApproachPoint | null
   steps: number
 }
@@ -276,7 +276,7 @@ export function propagate(input: PropagationInput): PropagationResult {
             const te = prevD > target.zoneRadius ? bisectCrossing(s, i, prevT, tt, target.zoneRadius) : tt
             if (!best || te < best.t) best = { kind: 'arrival', t: te, body: i }
             break
-          } else if (!fastPass) {
+          } else if (!fastPass || r.vrel < fastPass.relSpeed) {
             fastPass = approachAt(s, i, tt)
           }
         }

@@ -3,6 +3,7 @@
  * reference plan actually flies), budgets and stars were calibrated with tools/optimize.ts.
  * Every `solution` is replayed by tests/levels.test.ts — a level ships only if its solution wins.
  */
+import { fromKms } from '../physics/units'
 import type { Plan } from '../rules/plan'
 import type { LevelDef } from './types'
 
@@ -199,7 +200,7 @@ export const LEVELS: LevelDef[] = [
       { id: 'borey', phaseDeg: 200 },
     ],
     start: { kind: 'docked', bodyId: 'aqua', launchWindow: [0, 8] },
-    target: { bodyId: 'rubra', kind: 'rendezvous', zoneRadius: 0.12, maxRelSpeed: 0.04 },
+    target: { bodyId: 'rubra', kind: 'rendezvous', zoneRadius: 0.12, maxRelSpeed: fromKms(1.2) },
     budget: 0.2,
     maxBurns: 2,
     maxFlightTime: 7,

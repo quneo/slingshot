@@ -40,7 +40,7 @@ export function analyzeMiss(level: LevelDef, mission: MissionSystem, result: Pro
   if (result.collision) {
     if (!helper || result.collision.bodyIndex !== hi) return null
     const c = result.collision
-    const hm = helperAim(level, mission, result, ti, hi)
+    const hm = helperAim(level, mission, result, ti, hi, true)
     return { kind: 'near', t: c.t, x: c.x, y: c.y, distance: c.distance, ...(hm ? { assist: { bodyId: helper, miss: hm } } : {}) }
   }
 
@@ -56,13 +56,20 @@ export function analyzeMiss(level: LevelDef, mission: MissionSystem, result: Pro
 }
 
 /** Encounter analysis against the helper planet, aiming a few radii behind it (to speed up) or ahead (to brake). */
-function helperAim(level: LevelDef, mission: MissionSystem, result: PropagationResult, ti: number, hi: number): MissAnalysis | null {
+function helperAim(
+  level: LevelDef,
+  mission: MissionSystem,
+  result: PropagationResult,
+  ti: number,
+  hi: number,
+  skipNear = false,
+): MissAnalysis | null {
   const helperBody = mission.system.bodies[hi]
   const targetOrbit = mission.system.bodies[ti].orbit?.a ?? 0
   const helperOrbit = helperBody.orbit?.a ?? 1
   const lead = (HELPER_LEAD_RADII * helperBody.radius) / helperOrbit
   const aim = targetOrbit > helperOrbit ? -lead : lead
-  return orbitMiss(level, mission, result, hi, influenceRadius(CATALOG[mission.ids[hi]]) * 0.5, aim)
+  return orbitMiss(level, mission, result, hi, influenceRadius(CATALOG[mission.ids[hi]]) * 0.5, aim, skipNear)
 }
 
 /** tuned with the level solutions: following the advice lands on or next to a working slingshot */
@@ -79,6 +86,8 @@ function orbitMiss(
   ti: number,
   zone: number,
   aim = 0,
+  /** after a collision the closest approach is the impact itself, not a useful near miss */
+  skipNear = false,
 ): MissAnalysis | null {
   const target = mission.system.bodies[ti]
   if (!target.orbit) return null
@@ -89,7 +98,7 @@ function orbitMiss(
 
   // 1) the ship's closest approach to the target itself, if it is a near miss
   const c = result.closest[ti]
-  if (c && c.distance <= zone * 3 && c.t > s[0] + 1e-6) {
+  if (!skipNear && c && c.distance <= zone * 3 && c.t > s[0] + 1e-6) {
     return { kind: 'near', t: c.t, x: c.x, y: c.y, distance: c.distance }
   }
 

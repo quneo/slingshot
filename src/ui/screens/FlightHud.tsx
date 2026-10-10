@@ -69,6 +69,12 @@ function eventTimes(fc: PredictResponse): number[] {
 
 const SPEEDS: FlightSpeed[] = [1, 10, 100]
 
+/** Jump on the timeline; the clock keeps the play/pause state the HUD shows. */
+function seekTo(t: number) {
+  flightClock.seek(t)
+  if (!flightClock.finished) flightClock.playing = useGame.getState().flight.playing
+}
+
 const CAMERA: Record<CameraMode, { label: string; icon: typeof Video; next: CameraMode }> = {
   auto: { label: 'Авто-камера', icon: Video, next: 'ship' },
   ship: { label: 'За кораблём', icon: Crosshair, next: 'system' },
@@ -132,7 +138,7 @@ export function FlightHud() {
   const skip = (
     <Button
       size="icon"
-      onClick={() => next !== undefined && flightClock.seek(next - fromDays(3))}
+      onClick={() => next !== undefined && seekTo(next - fromDays(3))}
       disabled={next === undefined}
       aria-label="К следующему событию"
       title="К следующему событию"
@@ -171,7 +177,7 @@ export function FlightHud() {
             i < all.length - 1 ? 'bg-assist' : r.endReason === 'arrived' ? 'bg-go' : 'bg-danger',
           )}
           style={{ left: `${((e - start) / Math.max(1e-9, r.endTime - start)) * 100}%` }}
-          onClick={() => flightClock.seek(e - fromDays(3))}
+          onClick={() => seekTo(e - fromDays(3))}
           aria-label={`Перейти к ${days(e - start)}-му дню`}
         />
       ))}

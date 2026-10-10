@@ -55,6 +55,7 @@ function Stepper({
   useEffect(() => setText(value.toFixed(digits).replace('.', ',')), [value, digits])
   const clamp = (v: number) => Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v))
   const commit = () => {
+    if (text === value.toFixed(digits).replace('.', ',')) return
     const v = Number(text.replace(',', '.'))
     if (Number.isFinite(v)) onChange(clamp(v))
     else setText(value.toFixed(digits).replace('.', ','))
