@@ -159,6 +159,7 @@ export function GameCanvas() {
         let finishTimer: ReturnType<typeof setTimeout> | null = null
         let cameraMode = ''
         let manualSeen = 0
+        let introDone = false
 
         const overview = (fc: PredictResponse, level: LevelDef) => {
           const b = trajectoryBounds(fc)
@@ -168,7 +169,10 @@ export function GameCanvas() {
         const fitCurrent = (animate = true) => {
           const s = useGame.getState()
           if (s.screen === 'menu') {
-            scene.camera.fit(0, 0, 8.1, animate)
+            // the very first framing is a slow fly-in, later returns to the map are quick
+            scene.camera.animateTo(scene.camera.fitView(0, 0, 8.1), introDone || s.save.settings.reducedMotion ? 7 : 1.4)
+            introDone = true
+            if (!animate) scene.camera.set(scene.camera.fitView(0, 0, 8.1))
             return
           }
           const level = getLevel(s.levelId)

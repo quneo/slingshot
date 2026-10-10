@@ -17,7 +17,8 @@ export interface CameraView {
 export class Camera {
   x = 0
   y = 0
-  zoom = 120
+  /** starts far out: the first framing flies the camera into the system */
+  zoom = 9
   width = 1
   height = 1
   insets: Insets = { top: 0, right: 0, bottom: 0, left: 0 }
