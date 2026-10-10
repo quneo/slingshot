@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { LEVELS, getLevel, nextLevel } from '../game/levels/levels'
+import { LEVELS, getLevel } from '../game/levels/levels'
 import type { LevelDef } from '../game/levels/types'
 import type { MissionOutcome } from '../game/rules/evaluate'
 import { clonePlan, impulseMagnitude, newNodeId, planKey, type BurnNode, type Impulse, type Plan } from '../game/rules/plan'
@@ -407,4 +407,3 @@ export const useGame = create<Internal>()((set, get) => {
   }
 })
 
-export { nextLevel }

@@ -130,11 +130,6 @@ class SampleBuffer {
     this.count++
   }
 
-  pushSample(s: ShipSample): void {
-    const y = new Float64Array([s.x, s.y, s.vx, s.vy])
-    this.push(s.t, y)
-  }
-
   toArray(): Float64Array {
     return this.data.slice(0, this.count * SAMPLE_STRIDE)
   }

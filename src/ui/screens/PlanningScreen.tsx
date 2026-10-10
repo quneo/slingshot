@@ -65,7 +65,7 @@ function WidePlanning({ onBack }: { onBack: () => void }) {
           <Button size="icon" onClick={onBack} aria-label="К выбору миссий" title="К выбору миссий">
             <ChevronLeft size={22} />
           </Button>
-          <Wordmark compact />
+          <Wordmark compact className="hidden lg:block" />
         </div>
         <div className="pointer-events-auto flex items-start gap-2" data-inset="top">
           <DvMeter />

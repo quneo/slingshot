@@ -1,5 +1,4 @@
 import { Lock, Play, Settings } from 'lucide-react'
-import { CATALOG } from '../../game/levels/catalog'
 import { LEVELS, getLevel } from '../../game/levels/levels'
 import type { LevelDef } from '../../game/levels/types'
 import { isUnlocked, levelProgress, useGame } from '../../state/gameStore'
@@ -188,4 +187,3 @@ export function MissionSelect() {
   )
 }
 
-export const targetName = (l: LevelDef) => CATALOG[l.target.bodyId].name
