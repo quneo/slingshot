@@ -85,14 +85,22 @@ export function callout(ctx: Ctx, ax: number, ay: number, opts: CalloutOptions):
   })
   const w = Math.ceil(Math.max(...widths)) + padX * 2
   const h = lines.length * lineH + 10
-  const candidates: [number, number][] = [
-    [dist * 0.6, -dist - h],
-    [-dist * 0.6 - w, -dist - h],
-    [dist * 0.6, dist],
-    [-dist * 0.6 - w, dist],
-    [dist, -h / 2],
-    [-dist - w, -h / 2],
+  const near: [number, number][] = [
+    [0.6, -1],
+    [-0.6, -1],
+    [0.6, 1],
+    [-0.6, 1],
+    [1, 0],
+    [-1, 0],
   ]
+  // try close to the anchor first, then twice and three times as far
+  const candidates: [number, number][] = []
+  for (const k of [1, 2, 3]) {
+    for (const [ux, uy] of near) {
+      const d = dist * k
+      candidates.push([ux > 0 ? d * ux : d * ux - w, uy < 0 ? -d - h : uy > 0 ? d : -h / 2])
+    }
+  }
   let rect: Rect | null = null
   for (const [dx, dy] of candidates) {
     const r = { x: ax + dx, y: ay + dy, w, h }

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, Crosshair, Maximize2, Settings, Undo2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Crosshair, Eraser, Maximize2, Settings, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 import { CATALOG } from '../../game/levels/catalog'
 import { getLevel } from '../../game/levels/levels'
@@ -18,11 +18,15 @@ import { useCompact } from '../useMedia'
 function MapTools({ vertical = false }: { vertical?: boolean }) {
   const undo = useGame((s) => s.undo)
   const canUndo = useGame((s) => s.undoStack.length > 0)
+  const resetPlan = useGame((s) => s.resetPlan)
   const openSettings = useGame((s) => s.setSettingsOpen)
   return (
     <div className={cn('flex gap-2', vertical && 'flex-col')}>
       <Button size="icon" onClick={undo} disabled={!canUndo} aria-label="Отменить" title="Отменить (Ctrl+Z)">
         <Undo2 size={19} />
+      </Button>
+      <Button size="icon" onClick={resetPlan} aria-label="Начать маршрут заново" title="Начать маршрут заново">
+        <Eraser size={18} />
       </Button>
       <Button size="icon" onClick={() => sceneBridge.refit()} aria-label="Показать всю миссию" title="Показать всю миссию">
         <Maximize2 size={18} />

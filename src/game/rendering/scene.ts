@@ -86,6 +86,29 @@ interface Star {
   tw: number
 }
 
+/** Purely decorative far-background rocks in screen space (not part of the simulated system). */
+interface Rock {
+  /** position as a fraction of the viewport */
+  fx: number
+  fy: number
+  size: number
+  sprite: number
+  spin: number
+  phase: number
+}
+
+const ROCKS: Rock[] = [
+  { fx: 0.93, fy: 0.62, size: 22, sprite: 0, spin: 0.05, phase: 0.3 },
+  { fx: 0.97, fy: 0.7, size: 14, sprite: 3, spin: -0.07, phase: 1.1 },
+  { fx: 0.89, fy: 0.74, size: 11, sprite: 5, spin: 0.09, phase: 2.2 },
+  { fx: 0.95, fy: 0.8, size: 26, sprite: 1, spin: -0.04, phase: 0.8 },
+  { fx: 0.86, fy: 0.86, size: 9, sprite: 6, spin: 0.08, phase: 3.1 },
+  { fx: 0.91, fy: 0.92, size: 17, sprite: 2, spin: 0.06, phase: 1.7 },
+  { fx: 0.99, fy: 0.9, size: 12, sprite: 7, spin: -0.1, phase: 0.1 },
+  { fx: 0.04, fy: 0.12, size: 10, sprite: 4, spin: 0.07, phase: 2.6 },
+  { fx: 0.08, fy: 0.07, size: 15, sprite: 2, spin: -0.05, phase: 1.4 },
+]
+
 const DAY = (t: number) => Math.round(toDays(t))
 
 export class Scene {
@@ -96,6 +119,8 @@ export class Scene {
   private stars: Star[] = []
   private board = new LabelBoard({ x: 0, y: 0, w: 1, h: 1 })
   private readonly tmp = newSample()
+  /** wall-clock moment the played flight reached its target (for the arrival pulse) */
+  private pulse: { key: PredictResponse; at: number } | null = null
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -130,7 +155,10 @@ export class Scene {
     }))
   }
 
+  private nowSec = 0
+
   render(f: SceneFrame, nowSec: number): void {
+    this.nowSec = nowSec
     const ctx = this.ctx
     const cam = this.camera
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
@@ -200,6 +228,18 @@ export class Scene {
       ctx.globalAlpha = s.a * tw
       ctx.fillStyle = '#dfe9ff'
       ctx.fillRect(s.x, s.y, s.r, s.r)
+    }
+    ctx.globalAlpha = 0.5
+    const rockScale = Math.min(1.4, Math.max(0.7, Math.min(w, h) / 800))
+    for (const r of ROCKS) {
+      const img = this.assets.asteroids[r.sprite]
+      const size = r.size * rockScale
+      const drift = calm ? 0 : Math.sin(nowSec * 0.1 + r.phase) * 4
+      ctx.save()
+      ctx.translate(r.fx * w - px * 0.5 + drift, r.fy * h + py * 0.5 - drift * 0.5)
+      ctx.rotate(r.phase + (calm ? 0 : nowSec * r.spin))
+      ctx.drawImage(img, -size / 2, (-size / 2) * (img.height / img.width), size, size * (img.height / img.width))
+      ctx.restore()
     }
     ctx.globalAlpha = 1
   }
@@ -373,6 +413,14 @@ export class Scene {
     if (result.arrival && result.arrival.t <= visibleUntil) {
       const x = cam.sx(result.arrival.x)
       const y = cam.sy(result.arrival.y)
+      if (f.mode !== 'plan' && outcome.success && !f.calm) {
+        if (this.pulse?.key !== active) this.pulse = { key: active, at: this.nowSec }
+        const age = this.nowSec - this.pulse.at
+        for (let k = 0; k < 3; k++) {
+          const p = (age - k * 0.35) / 1.6
+          if (p > 0 && p < 1) ring(ctx, x, y, 10 + p * 70, withAlpha(COLORS.green, (1 - p) * 0.8), 2.5 * (1 - p) + 0.5)
+        }
+      }
       ring(ctx, x, y, 8, outcome.success ? COLORS.green : COLORS.amber, 2.2, COLORS.bg)
       ring(ctx, x, y, 3, COLORS.text, 2)
       const late = outcome.failure === 'deadline'
