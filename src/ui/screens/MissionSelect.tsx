@@ -1,4 +1,5 @@
 import { Lock, Play, Settings } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { LEVELS, getLevel } from '../../game/levels/levels'
 import type { LevelDef } from '../../game/levels/types'
 import { isUnlocked, levelProgress, useGame } from '../../state/gameStore'
@@ -76,11 +77,16 @@ function SelectedCard({ level, className }: { level: LevelDef; className?: strin
 
 function MissionTile({ level, selected, onClick }: { level: LevelDef; selected: boolean; onClick: () => void }) {
   const save = useGame((s) => s.save)
+  const ref = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (selected) ref.current?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
+  }, [selected])
   const locked = !isUnlocked(save, level.id)
   const prog = levelProgress(save, level.id)
   const from = START_BODY(level)
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       aria-pressed={selected}
