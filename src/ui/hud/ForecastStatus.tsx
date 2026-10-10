@@ -21,12 +21,18 @@ export function describeOutcome(level: LevelDef, o: MissionOutcome): StatusView 
   const target = CATALOG[level.target.bodyId].name
   if (o.success) return { tone: 'ok', title: `${target}: цель достигнута`, detail: `на ${days(o.flightTime)}-й день полёта` }
   switch (o.failure) {
-    case 'collision':
+    case 'collision': {
+      const hm = o.miss?.assist?.miss
+      const advice =
+        hm?.kind === 'timing' && hm.launchShift !== null && Math.abs(days(hm.launchShift)) >= 1
+          ? ` Праща — это пролёт мимо планеты: попробуйте старт на ${Math.abs(days(hm.launchShift))} дн. ${hm.launchShift > 0 ? 'позже' : 'раньше'}.`
+          : ''
       return {
         tone: 'bad',
         title: `Столкновение: ${CATALOG[o.collisionBody ?? 'lyra'].name}`,
-        detail: `на ${days(o.flightTime)}-й день полёта`,
+        detail: `На ${days(o.flightTime)}-й день полёта.${advice}`,
       }
+    }
     case 'escaped':
       return { tone: 'bad', title: 'Корабль улетает из системы', detail: 'Импульс слишком сильный или направлен мимо цели.' }
     case 'deadline':
@@ -38,6 +44,22 @@ export function describeOutcome(level: LevelDef, o: MissionOutcome): StatusView 
     case 'missed': {
       const m = o.miss
       const gen = genitive(target)
+      if (m?.assist) {
+        const helper = CATALOG[m.assist.bodyId].name
+        const hm = m.assist.miss
+        const why = `Без пращи до ${gen} не хватит топлива.`
+        if (hm.kind === 'timing') {
+          const d = Math.max(1, days(Math.abs(hm.lag)))
+          const advice =
+            hm.launchShift !== null && Math.abs(days(hm.launchShift)) >= 1
+              ? ` Попробуйте старт на ${Math.abs(days(hm.launchShift))} дн. ${hm.launchShift > 0 ? 'позже' : 'раньше'}.`
+              : ''
+          return { tone: 'warn', title: `${helper}: разминулись на ${d} дн.`, detail: why + advice }
+        }
+        if (hm.kind === 'short' || hm.kind === 'long')
+          return { tone: 'warn', title: `Не долетаете до ${genitive(helper)}`, detail: `${why} Нужно добраться до орбиты ${genitive(helper)}: не хватает ${mkm(hm.gap)}.` }
+        return { tone: 'warn', title: `${helper} рядом, но праща не вышла`, detail: `${why} Пройдите ближе к ${dativeOf(helper)}.` }
+      }
       if (m?.kind === 'short')
         return { tone: 'warn', title: `Не долетаете до орбиты ${gen}`, detail: `Не хватает ${mkm(m.gap)}. Больше импульса вперёд поднимет орбиту.` }
       if (m?.kind === 'long')
@@ -120,5 +142,8 @@ export function ForecastStatus({ compact = false }: { compact?: boolean }) {
     </div>
   )
 }
+
+const DATIVE: Record<string, string> = { Колосс: 'Колоссу', Аурум: 'Ауруму', Борей: 'Борею', Рубра: 'Рубре', Аква: 'Акве', Виола: 'Виоле', Пепел: 'Пеплу' }
+const dativeOf = (name: string) => DATIVE[name] ?? name
 
 const fmt = (v: number) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2, minimumFractionDigits: 1 }).format(toKms(v))

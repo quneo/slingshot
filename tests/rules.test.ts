@@ -36,6 +36,21 @@ describe('miss analysis gives actionable feedback', () => {
   })
 })
 
+describe('slingshot levels explain misses through the helper planet', () => {
+  it('L3 from day 0: the miss is explained via Colossus, and the advice leads to a win', () => {
+    const level = getLevel('L3')
+    const plan = { ...level.solution, launchTime: 0 }
+    const first = predict(1, level.id, plan)
+    const helper = first.outcome.miss?.assist
+    expect(helper?.bodyId).toBe('colossus')
+    expect(helper?.miss.kind).toBe('timing')
+    const shift = helper?.miss.kind === 'timing' ? helper.miss.launchShift : null
+    expect(shift).not.toBeNull()
+    const second = predict(2, level.id, { ...plan, launchTime: plan.launchTime + shift! })
+    expect(second.outcome.success).toBe(true)
+  })
+})
+
 describe('store edits respect the rules', () => {
   beforeEach(() => {
     useGame.getState().startLevel('L3')

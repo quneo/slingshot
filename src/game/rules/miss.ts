@@ -1,3 +1,4 @@
+import { CATALOG, influenceRadius, type BodyId } from '../levels/catalog'
 import type { MissionSystem } from '../levels/mission'
 import type { LevelDef } from '../levels/types'
 import { SAMPLE_STRIDE } from '../physics/interpolate'
@@ -26,12 +27,62 @@ export type MissAnalysis =
     }
   | { kind: 'near'; t: number; x: number; y: number; distance: number }
 
-export function analyzeMiss(level: LevelDef, mission: MissionSystem, result: PropagationResult): MissAnalysis | null {
+/** A missed target, plus — when the flight never used the level's helper planet — how it missed that planet. */
+export type MissReport = MissAnalysis & { assist?: { bodyId: BodyId; miss: MissAnalysis } }
+
+export function analyzeMiss(level: LevelDef, mission: MissionSystem, result: PropagationResult): MissReport | null {
+  if (result.arrival) return null
   const ti = mission.indexOf(level.target.bodyId)
+  const helper = level.hintBody && level.hintBody !== level.target.bodyId ? level.hintBody : null
+  const hi = helper ? mission.indexOf(helper) : -1
+
+  // flew into the helper planet: a slingshot passes it, so say how to shift the encounter
+  if (result.collision) {
+    if (!helper || result.collision.bodyIndex !== hi) return null
+    const c = result.collision
+    const hm = helperAim(level, mission, result, ti, hi)
+    return { kind: 'near', t: c.t, x: c.x, y: c.y, distance: c.distance, ...(hm ? { assist: { bodyId: helper, miss: hm } } : {}) }
+  }
+
+  const miss = orbitMiss(level, mission, result, ti, level.target.zoneRadius)
+  if (!miss) return null
+  // a slingshot level missed because the ship never met its helper planet: explain that encounter instead
+  if ((miss.kind === 'short' || miss.kind === 'long') && helper) {
+    const used = result.flybys.some((f) => f.bodyIndex === hi && f.complete)
+    const hm = used ? null : helperAim(level, mission, result, ti, hi)
+    if (hm) return { ...miss, assist: { bodyId: helper, miss: hm } }
+  }
+  return miss
+}
+
+/** Encounter analysis against the helper planet, aiming a few radii behind it (to speed up) or ahead (to brake). */
+function helperAim(level: LevelDef, mission: MissionSystem, result: PropagationResult, ti: number, hi: number): MissAnalysis | null {
+  const helperBody = mission.system.bodies[hi]
+  const targetOrbit = mission.system.bodies[ti].orbit?.a ?? 0
+  const helperOrbit = helperBody.orbit?.a ?? 1
+  const lead = (HELPER_LEAD_RADII * helperBody.radius) / helperOrbit
+  const aim = targetOrbit > helperOrbit ? -lead : lead
+  return orbitMiss(level, mission, result, hi, influenceRadius(CATALOG[mission.ids[hi]]) * 0.5, aim)
+}
+
+/** tuned with the level solutions: following the advice lands on or next to a working slingshot */
+const HELPER_LEAD_RADII = 2.5
+
+/**
+ * @param aim desired angle (rad) of the meeting point relative to the planet when the ship crosses its orbit:
+ *   0 = meet the planet itself, < 0 = pass behind it, > 0 = pass ahead of it
+ */
+function orbitMiss(
+  level: LevelDef,
+  mission: MissionSystem,
+  result: PropagationResult,
+  ti: number,
+  zone: number,
+  aim = 0,
+): MissAnalysis | null {
   const target = mission.system.bodies[ti]
-  if (!target.orbit || result.arrival) return null
+  if (!target.orbit) return null
   const a = target.orbit.a
-  const zone = level.target.zoneRadius
   const s = result.samples
   const n = result.sampleCount
   if (n < 2) return null
@@ -74,7 +125,7 @@ export function analyzeMiss(level: LevelDef, mission: MissionSystem, result: Pro
 
   // 3) timing: angle between the planet and the meeting point, converted to time along its orbit
   const p = bodyState(mission.system, ti, t)
-  let dAng = Math.atan2(y, x) - Math.atan2(p.y, p.x)
+  let dAng = Math.atan2(y, x) - Math.atan2(p.y, p.x) - aim
   while (dAng > Math.PI) dAng -= 2 * Math.PI
   while (dAng < -Math.PI) dAng += 2 * Math.PI
   const meanMotion = Math.sqrt(mission.system.centralMu / a ** 3)

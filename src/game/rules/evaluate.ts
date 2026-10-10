@@ -2,7 +2,7 @@ import type { BodyId } from '../levels/catalog'
 import type { MissionSystem } from '../levels/mission'
 import type { LevelDef } from '../levels/types'
 import type { ApproachPoint, PropagationResult } from '../physics/propagate'
-import { analyzeMiss, type MissAnalysis } from './miss'
+import { analyzeMiss, type MissReport } from './miss'
 import { burnCount, impulseMagnitude, plannedDv, sortedNodes, type Plan } from './plan'
 
 const EPS = 1e-9
@@ -56,7 +56,7 @@ export interface MissionOutcome {
   /** nodes scheduled after the trajectory ended */
   unexecutedNodeIds: string[]
   /** for missed flights: what went wrong, in actionable terms */
-  miss: MissAnalysis | null
+  miss: MissReport | null
 }
 
 export function evaluateMission(
@@ -110,7 +110,7 @@ export function evaluateMission(
   }
 
   if (failure) {
-    const miss = failure === 'missed' || failure === 'escaped' ? analyzeMiss(level, mission, result) : null
+    const miss = failure === 'missed' || failure === 'escaped' || failure === 'collision' ? analyzeMiss(level, mission, result) : null
     return { ...base, success: false, failure, stars: 0, miss }
   }
 
