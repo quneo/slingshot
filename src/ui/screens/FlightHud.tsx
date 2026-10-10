@@ -99,83 +99,145 @@ export function FlightHud() {
 
   const toneCls = { trail: 'text-trail', assist: 'text-assist', go: 'text-go', danger: 'text-danger' }[stage.tone]
 
+  const playPause = (
+    <Button size="icon" onClick={() => setPlaying(!flight.playing)} aria-label={flight.playing ? 'Пауза' : 'Продолжить'}>
+      {flight.playing ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current" />}
+    </Button>
+  )
+  const speeds = (
+    <div className="panel-quiet flex h-11 items-center p-1" role="radiogroup" aria-label="Скорость времени">
+      {SPEEDS.map((sp) => (
+        <button
+          key={sp}
+          role="radio"
+          aria-checked={flight.speed === sp}
+          onClick={() => setSpeed(sp)}
+          className={cn(
+            'num h-9 rounded-lg px-2.5 text-[13px] font-bold transition-colors duration-150',
+            flight.speed === sp ? 'bg-trail text-space' : 'text-ink-2 hover:text-ink',
+          )}
+        >
+          ×{sp}
+        </button>
+      ))}
+    </div>
+  )
+  const skip = (
+    <Button
+      size="icon"
+      onClick={() => next !== undefined && flightClock.seek(next - fromDays(3))}
+      disabled={next === undefined}
+      aria-label="К следующему событию"
+      title="К следующему событию"
+    >
+      <SkipForward size={19} />
+    </Button>
+  )
+  const camera = (
+    <Button
+      size={compact ? 'icon' : 'md'}
+      onClick={() => setCamera(flight.camera === 'ship' ? 'system' : 'ship')}
+      aria-label={flight.camera === 'ship' ? 'Показать систему' : 'Следить за кораблём'}
+      className="h-11"
+    >
+      {flight.camera === 'ship' ? <Globe2 size={18} /> : <Crosshair size={18} />}
+      {!compact && (flight.camera === 'ship' ? 'Система' : 'За кораблём')}
+    </Button>
+  )
+  const edit = (
+    <Button size={compact ? 'icon' : 'md'} onClick={backToPlanning} className="h-11" aria-label="Изменить маршрут">
+      <Pencil size={17} />
+      {!compact && 'Изменить маршрут'}
+    </Button>
+  )
+  const progressBar = (
+    <div className="relative h-2 rounded-full bg-line/50" role="progressbar" aria-label="Ход полёта" aria-valuenow={Math.round(progress * 100)}>
+      <div className="absolute inset-y-0 left-0 rounded-full bg-trail" style={{ width: `${Math.min(100, progress * 100)}%` }} />
+      {eventTimes(fc).map((e, i) => (
+        <button
+          key={i}
+          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-space bg-assist"
+          style={{ left: `${((e - start) / Math.max(1e-9, r.endTime - start)) * 100}%` }}
+          onClick={() => flightClock.seek(e - fromDays(3))}
+          aria-label={`Перейти к ${days(e - start)}-му дню`}
+        />
+      ))}
+    </div>
+  )
+  const speedText = toKms(speed).toLocaleString('ru-RU', { maximumFractionDigits: 1, minimumFractionDigits: 1 })
+
+  if (compact) {
+    return (
+      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between gap-2 p-2 pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
+        <section className="panel pointer-events-auto rounded-xl px-3.5 py-2.5" data-inset="top" aria-live="polite">
+          <div className="flex items-baseline justify-between gap-2 text-[12px] text-ink-2">
+            <span className="font-semibold">
+              Полёт, <span className="num">{days(t - start)} / {days(r.endTime - start)} дн.</span>
+            </span>
+            <span className="num">
+              {target.name}: {mkm(dist)}
+            </span>
+          </div>
+          <div className={cn('mt-0.5 text-[15px] font-extrabold leading-tight', toneCls)}>{stage.title}</div>
+        </section>
+        <footer className="panel pointer-events-auto space-y-3 p-3" data-inset="bottom">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">{progressBar}</div>
+            <div className="num shrink-0 text-[13px] font-bold">
+              {speedText} <span className="font-semibold text-ink-2">км/с</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-1.5">
+            {playPause}
+            {speeds}
+            {skip}
+            {camera}
+            {edit}
+          </div>
+        </footer>
+      </div>
+    )
+  }
+
   return (
-    <div className="pointer-events-none absolute inset-0 flex flex-col justify-between gap-3 p-2 sm:p-4 pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
+    <div className="pointer-events-none absolute inset-0 flex flex-col justify-between gap-3 p-4">
       <header className="flex items-start justify-between gap-2" data-inset="top">
         <div className="flex flex-col gap-3">
-          {!compact && <Wordmark compact />}
-          <section className="panel pointer-events-auto w-[min(300px,calc(100vw-180px))] p-3 sm:p-4" aria-live="polite">
+          <Wordmark compact />
+          <section className="panel pointer-events-auto w-[300px] p-4" aria-live="polite">
             <div className="flex items-baseline justify-between text-[12px] text-ink-2">
               <span className="font-semibold">Полёт</span>
               <span className="num">
                 {days(t - start)} / {days(r.endTime - start)} дн.
               </span>
             </div>
-            <div className={cn('mt-0.5 text-[15px] font-extrabold leading-tight sm:text-[17px]', toneCls)}>{stage.title}</div>
-            {!compact && (
-              <div className="hairline mt-3 flex items-center gap-3 border-t pt-3">
-                <PlanetThumb id={target.id} size={36} />
-                <div className="text-[13px]">
-                  <div className="text-ink-2">Цель</div>
-                  <div className="font-bold">
-                    {target.name}, <span className="num">{mkm(dist)}</span>
-                  </div>
+            <div className={cn('mt-0.5 text-[17px] font-extrabold leading-tight', toneCls)}>{stage.title}</div>
+            <div className="hairline mt-3 flex items-center gap-3 border-t pt-3">
+              <PlanetThumb id={target.id} size={36} />
+              <div className="text-[13px]">
+                <div className="text-ink-2">Цель</div>
+                <div className="font-bold">
+                  {target.name}, <span className="num">{mkm(dist)}</span>
                 </div>
               </div>
-            )}
+            </div>
           </section>
         </div>
         <div className="pointer-events-auto flex flex-col items-end gap-2">
           <div className="flex gap-2">
-            <Button size="icon" onClick={() => setPlaying(!flight.playing)} aria-label={flight.playing ? 'Пауза' : 'Продолжить'}>
-              {flight.playing ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current" />}
-            </Button>
-            <div className="panel-quiet flex h-11 items-center p-1" role="radiogroup" aria-label="Скорость времени">
-              {SPEEDS.map((sp) => (
-                <button
-                  key={sp}
-                  role="radio"
-                  aria-checked={flight.speed === sp}
-                  onClick={() => setSpeed(sp)}
-                  className={cn(
-                    'num h-9 rounded-lg px-2.5 text-[13px] font-bold transition-colors duration-150',
-                    flight.speed === sp ? 'bg-trail text-space' : 'text-ink-2 hover:text-ink',
-                  )}
-                >
-                  ×{sp}
-                </button>
-              ))}
-            </div>
-            <Button
-              size="icon"
-              onClick={() => next !== undefined && flightClock.seek(next - fromDays(3))}
-              disabled={next === undefined}
-              aria-label="К следующему событию"
-              title="К следующему событию"
-            >
-              <SkipForward size={19} />
-            </Button>
+            {playPause}
+            {speeds}
+            {skip}
           </div>
           <div className="flex gap-2">
-            <Button
-              size={compact ? 'icon' : 'md'}
-              onClick={() => setCamera(flight.camera === 'ship' ? 'system' : 'ship')}
-              aria-label={flight.camera === 'ship' ? 'Показать систему' : 'Следить за кораблём'}
-              className="h-11"
-            >
-              {flight.camera === 'ship' ? <Globe2 size={18} /> : <Crosshair size={18} />}
-              {!compact && (flight.camera === 'ship' ? 'Система' : 'За кораблём')}
-            </Button>
-            <Button size={compact ? 'icon' : 'md'} onClick={backToPlanning} className="h-11" aria-label="Изменить маршрут">
-              <Pencil size={17} />
-              {!compact && 'Изменить маршрут'}
-            </Button>
+            {camera}
+            {edit}
           </div>
         </div>
       </header>
 
-      <footer className="pointer-events-auto flex items-end gap-2 sm:gap-3" data-inset="bottom">
-        <div className="panel hidden items-center gap-3 px-4 py-3 sm:flex">
+      <footer className="pointer-events-auto flex items-end gap-3" data-inset="bottom">
+        <div className="panel flex items-center gap-3 px-4 py-3">
           <div>
             <div className="text-[12px] text-ink-2">Δv потрачено</div>
             <div className="num text-[19px] font-extrabold">
@@ -183,26 +245,13 @@ export function FlightHud() {
             </div>
           </div>
         </div>
-        <div className="panel min-w-0 flex-1 px-4 py-3.5">
-          <div className="relative h-2 rounded-full bg-line/70" role="progressbar" aria-label="Ход полёта" aria-valuenow={Math.round(progress * 100)}>
-            <div className="absolute inset-y-0 left-0 rounded-full bg-trail" style={{ width: `${Math.min(100, progress * 100)}%` }} />
-            {eventTimes(fc).map((e, i) => (
-              <button
-                key={i}
-                className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-space bg-assist"
-                style={{ left: `${((e - start) / Math.max(1e-9, r.endTime - start)) * 100}%` }}
-                onClick={() => flightClock.seek(e - fromDays(3))}
-                aria-label={`Перейти к ${days(e - start)}-му дню`}
-              />
-            ))}
-          </div>
-        </div>
+        <div className="panel min-w-0 flex-1 px-4 py-[22px]">{progressBar}</div>
         <div className="panel flex items-center gap-3 px-4 py-3">
           <Gauge className="text-trail" size={26} aria-hidden />
           <div>
             <div className="text-[12px] text-ink-2">Скорость</div>
             <div className="num text-[19px] font-extrabold leading-tight">
-              {toKms(speed).toLocaleString('ru-RU', { maximumFractionDigits: 1, minimumFractionDigits: 1 })}
+              {speedText}
               <span className="text-[13px] font-semibold text-ink-2"> км/с</span>
             </div>
           </div>

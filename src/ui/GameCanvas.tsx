@@ -159,7 +159,7 @@ export function GameCanvas() {
         const fitCurrent = (animate = true) => {
           const s = useGame.getState()
           if (s.screen === 'menu') {
-            scene.camera.fit(0, 0, 7.75, animate)
+            scene.camera.fit(0, 0, 8.1, animate)
             return
           }
           const level = getLevel(s.levelId)

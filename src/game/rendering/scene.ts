@@ -214,10 +214,13 @@ export class Scene {
   }
 
   private bodyScreens(f: SceneFrame) {
+    // the campaign map is a showcase: planets drawn extra large (no physics happens there)
+    const showcase = f.mode === 'menu' ? 1.75 : 1
     return f.mission.ids.map((id, i) => {
       const st = bodyState(f.mission.system, i, f.time)
       const c = CATALOG[id]
-      return { id, i, c, x: this.camera.sx(st.x), y: this.camera.sy(st.y), wx: st.x, wy: st.y, r: this.renderRadius(c, f.enlarge) }
+      const r = this.renderRadius(c, f.enlarge) * (c.orbitRadius === null ? Math.min(showcase, 1.3) : showcase)
+      return { id, i, c, x: this.camera.sx(st.x), y: this.camera.sy(st.y), wx: st.x, wy: st.y, r }
     })
   }
 

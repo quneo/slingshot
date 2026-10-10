@@ -55,38 +55,122 @@ export function ResultPanel() {
   ].join(' → ')
   const verdict = describeOutcome(level, outcome)
 
-  return (
-    <div className="pointer-events-none absolute inset-0 flex flex-col p-3 sm:p-5">
-      <div className="mx-auto mt-1 max-w-[640px] text-center animate-rise sm:mt-3" data-inset="top">
-        <h1
-          className={cn(
-            'text-[30px] font-extrabold leading-tight tracking-tight sm:text-[46px]',
-            outcome.success ? 'text-transparent' : 'text-danger',
-          )}
-          style={
-            outcome.success
-              ? { backgroundImage: 'linear-gradient(180deg, #fff3cf, #ffc24d)', backgroundClip: 'text', WebkitBackgroundClip: 'text' }
-              : undefined
-          }
-        >
-          {outcome.success ? 'Миссия выполнена!' : 'Миссия не выполнена'}
-        </h1>
-        <div className="mt-1 text-[15px] font-semibold text-ink sm:text-[18px]">{route}</div>
-        <p className="mt-1 text-[13.5px] text-ink-2">
-          {outcome.success
-            ? assists.length > 0
-              ? `Гравитация ${assists.length > 1 ? 'планет' : 'планеты'} изменила скорость на ${freeGain.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/с — без топлива.`
-              : 'Импульс рассчитан точно.'
-            : `${verdict.title}${verdict.detail ? `: ${verdict.detail}` : ''}.`}
-        </p>
-      </div>
+  const nextStarHint =
+    outcome.success &&
+    (outcome.stars === 3
+      ? 'Лучше и не придумать: максимум звёзд.'
+      : outcome.stars < 2
+        ? `Вторая звезда — расход до ${kms(level.stars.dvForTwo, 2)}.`
+        : `Третья звезда — до ${kms(level.stars.dvForThree, 2)} и не дольше ${daysLabel(level.stars.timeForThree)}.`)
 
-      <div className={cn('flex min-h-0 flex-1 items-center', compact ? 'justify-center' : 'justify-end')}>
-        <section
-          className={cn('panel pointer-events-auto w-[min(380px,100%)] p-5 animate-rise', !compact && 'mr-1')}
-          data-inset={compact ? undefined : 'right'}
-          aria-label="Результат"
-        >
+  const attempts = (
+    <div className={cn('hairline space-y-1 border-t', compact ? 'mt-2 pt-2' : 'mt-3 pt-3')}>
+      {!compact && (
+        <div className="flex items-center gap-2 pb-1 text-[12.5px] font-semibold text-ink-2">
+          <Trophy size={14} aria-hidden /> Ваши попытки
+        </div>
+      )}
+      <AttemptRow label={report.isNewBest ? 'Новый рекорд' : 'Лучшая'} a={report.isNewBest ? summaryOf(outcome) : report.bestBefore} highlight={report.isNewBest} />
+      {!report.isNewBest && <AttemptRow label="Эта попытка" a={summaryOf(outcome)} />}
+      <AttemptRow label="Предыдущая" a={report.previous} />
+    </div>
+  )
+
+  const secondary = (
+    <>
+      <Button size={compact ? 'md' : 'lg'} className={compact ? 'flex-1' : undefined} onClick={replay}>
+        <RotateCcw size={18} aria-hidden />
+        {compact ? 'Повтор' : 'Повторить полёт'}
+      </Button>
+      {outcome.success ? (
+        <Button size={compact ? 'md' : 'lg'} className={compact ? 'flex-1' : undefined} onClick={backToPlanning}>
+          <Pencil size={17} aria-hidden />
+          {compact ? 'Маршрут' : 'Изменить маршрут'}
+        </Button>
+      ) : (
+        <Button size={compact ? 'md' : 'lg'} className={compact ? 'flex-1' : undefined} onClick={() => openMenu()}>
+          <MapIcon size={18} aria-hidden />К миссиям
+        </Button>
+      )}
+    </>
+  )
+  const primaryCls = compact ? 'h-14 w-full text-[20px]' : 'min-w-[220px]'
+  const primary = !outcome.success ? (
+    <Button variant="go" size="xl" className={primaryCls} onClick={backToPlanning}>
+      <Pencil size={22} aria-hidden />
+      Изменить маршрут
+    </Button>
+  ) : next ? (
+    <Button variant="go" size="xl" className={primaryCls} onClick={() => startLevel(next.id)}>
+      Далее
+      <ChevronRight size={24} aria-hidden />
+    </Button>
+  ) : (
+    <Button variant="go" size="xl" className={primaryCls} onClick={() => openMenu()}>
+      <MapIcon size={22} aria-hidden />К миссиям
+    </Button>
+  )
+
+  const header = (
+    <div className="mx-auto mt-1 max-w-[640px] text-center animate-rise sm:mt-3" data-inset="top">
+      <h1
+        className={cn('text-[30px] font-extrabold leading-tight tracking-tight sm:text-[46px]', outcome.success ? 'text-transparent' : 'text-danger')}
+        style={
+          outcome.success
+            ? { backgroundImage: 'linear-gradient(180deg, #fff3cf, #ffc24d)', backgroundClip: 'text', WebkitBackgroundClip: 'text' }
+            : undefined
+        }
+      >
+        {outcome.success ? 'Миссия выполнена!' : 'Миссия не выполнена'}
+      </h1>
+      <div className={cn('mt-1 text-[15px] font-semibold sm:text-[18px]', outcome.success ? 'text-ink' : 'text-assist')}>
+        {outcome.success ? route : verdict.title}
+      </div>
+      <p className="mx-auto mt-1 max-w-[520px] text-[13px] text-ink-2 sm:text-[13.5px]">
+        {outcome.success
+          ? assists.length > 0
+            ? `Гравитация ${assists.length > 1 ? 'планет' : 'планеты'} изменила скорость на ${freeGain.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/с — без топлива.`
+            : 'Импульс рассчитан точно.'
+          : verdict.detail}
+      </p>
+    </div>
+  )
+
+  if (compact) {
+    return (
+      <div className="pointer-events-none absolute inset-0 flex flex-col p-2 pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
+        {header}
+        <div className="flex-1" />
+        <section className="panel pointer-events-auto p-4 animate-rise" data-inset="bottom" aria-label="Результат">
+          <div className="flex items-center justify-between gap-3">
+            <Stars value={outcome.stars} size={30} animate />
+            <div className="num text-right text-[13px] leading-snug">
+              <div>
+                <span className="text-ink-2">Δv </span>
+                <span className="font-bold">
+                  {kmsNumber(outcome.spentDv, 2)} / {kmsNumber(level.budget)} км/с
+                </span>
+              </div>
+              <div>
+                <span className="text-ink-2">Полёт </span>
+                <span className="font-bold">{daysLabel(outcome.flightTime)}</span>
+              </div>
+            </div>
+          </div>
+          {nextStarHint && <div className="mt-2 text-[12px] text-ink-2">{nextStarHint}</div>}
+          {attempts}
+          <div className="mt-3 flex gap-2">{secondary}</div>
+          <div className="mt-2">{primary}</div>
+        </section>
+      </div>
+    )
+  }
+
+  return (
+    <div className="pointer-events-none absolute inset-0 flex flex-col p-5">
+      {header}
+      <div className="flex min-h-0 flex-1 items-center justify-end">
+        <section className="panel pointer-events-auto mr-1 w-[min(380px,100%)] p-5 animate-rise" data-inset="right" aria-label="Результат">
           <div className="flex items-baseline justify-between">
             <h2 className="text-[21px] font-extrabold">Результат</h2>
             <span className="text-[12.5px] text-ink-2">Миссия {level.number}</span>
@@ -105,47 +189,13 @@ export function ResultPanel() {
               <Row icon={<Zap size={18} className="text-assist" />} label="Гравитация дала" value={`${freeGain.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/с`} />
             )}
           </div>
-          {outcome.success && (
-            <div className="hairline mt-4 border-t pt-3 text-[12.5px] text-ink-2">
-              {outcome.stars < 3 &&
-                (outcome.stars < 2
-                  ? `Вторая звезда — расход до ${kms(level.stars.dvForTwo, 2)}.`
-                  : `Третья звезда — до ${kms(level.stars.dvForThree, 2)} и не дольше ${daysLabel(level.stars.timeForThree)}.`)}
-              {outcome.stars === 3 && 'Лучше и не придумать: максимум звёзд.'}
-            </div>
-          )}
-          <div className="hairline mt-3 space-y-1 border-t pt-3">
-            <div className="flex items-center gap-2 pb-1 text-[12.5px] font-semibold text-ink-2">
-              <Trophy size={14} aria-hidden /> Ваши попытки
-            </div>
-            <AttemptRow label={report.isNewBest ? 'Новый рекорд' : 'Лучшая'} a={report.isNewBest ? summaryOf(outcome) : report.bestBefore} highlight={report.isNewBest} />
-            {!report.isNewBest && <AttemptRow label="Эта попытка" a={summaryOf(outcome)} />}
-            <AttemptRow label="Предыдущая" a={report.previous} />
-          </div>
+          {nextStarHint && <div className="hairline mt-4 border-t pt-3 text-[12.5px] text-ink-2">{nextStarHint}</div>}
+          {attempts}
         </section>
       </div>
-
       <div className="pointer-events-auto mt-3 flex flex-wrap items-center justify-between gap-2" data-inset="bottom">
-        <div className="flex gap-2">
-          <Button size="lg" onClick={replay}>
-            <RotateCcw size={18} aria-hidden />
-            Повторить полёт
-          </Button>
-          <Button size="lg" onClick={backToPlanning}>
-            <Pencil size={17} aria-hidden />
-            Изменить маршрут
-          </Button>
-        </div>
-        {outcome.success && next ? (
-          <Button variant="go" size="xl" className="min-w-[200px]" onClick={() => startLevel(next.id)}>
-            Далее
-            <ChevronRight size={24} aria-hidden />
-          </Button>
-        ) : (
-          <Button variant={outcome.success ? 'go' : 'panel'} size="lg" onClick={() => openMenu()}>
-            <MapIcon size={18} aria-hidden />К миссиям
-          </Button>
-        )}
+        <div className="flex gap-2">{secondary}</div>
+        {primary}
       </div>
     </div>
   )

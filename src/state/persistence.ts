@@ -45,7 +45,20 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export const emptyProgress = (): LevelProgress => ({ completed: false, stars: 0, best: null, attempts: [], lastPlan: null })
 
-export const freshSave = (): SaveData => ({ version: SAVE_VERSION, settings: { ...DEFAULT_SETTINGS }, progress: {}, tutorialDone: [] })
+const prefersReducedMotion = (): boolean => {
+  try {
+    return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  } catch {
+    return false
+  }
+}
+
+export const freshSave = (): SaveData => ({
+  version: SAVE_VERSION,
+  settings: { ...DEFAULT_SETTINGS, reducedMotion: prefersReducedMotion() },
+  progress: {},
+  tutorialDone: [],
+})
 
 function migrate(raw: unknown): SaveData {
   if (!raw || typeof raw !== 'object') return freshSave()
