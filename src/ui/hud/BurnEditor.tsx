@@ -170,7 +170,8 @@ export function BurnEditor({ compact = false }: { compact?: boolean }) {
       min={-180}
       max={180}
       fluid={compact}
-      onChange={(v) => apply(toImpulse(mag, v))}
+      // a zero vector has no direction: give it a small magnitude so the chosen angle sticks
+      onChange={(v) => apply(toImpulse(Math.max(mag, 0.1), v))}
     />
   )
   const directions = (
