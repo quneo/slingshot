@@ -14,7 +14,16 @@ import { bodyState } from '../physics/system'
 export type MissAnalysis =
   | { kind: 'short'; t: number; x: number; y: number; gap: number }
   | { kind: 'long'; t: number; x: number; y: number; gap: number }
-  | { kind: 'timing'; t: number; x: number; y: number; lag: number; distance: number }
+  | {
+      kind: 'timing'
+      t: number
+      x: number
+      y: number
+      lag: number
+      distance: number
+      /** suggested launch-date change (docked starts with a window), model time; null if not applicable */
+      launchShift: number | null
+    }
   | { kind: 'near'; t: number; x: number; y: number; distance: number }
 
 export function analyzeMiss(level: LevelDef, mission: MissionSystem, result: PropagationResult): MissAnalysis | null {
@@ -69,5 +78,38 @@ export function analyzeMiss(level: LevelDef, mission: MissionSystem, result: Pro
   while (dAng > Math.PI) dAng -= 2 * Math.PI
   while (dAng < -Math.PI) dAng += 2 * Math.PI
   const meanMotion = Math.sqrt(mission.system.centralMu / a ** 3)
-  return { kind: 'timing', t, x, y, lag: dAng / meanMotion, distance: Math.hypot(x - p.x, y - p.y) }
+  return {
+    kind: 'timing',
+    t,
+    x,
+    y,
+    lag: dAng / meanMotion,
+    distance: Math.hypot(x - p.x, y - p.y),
+    launchShift: suggestLaunchShift(level, mission, dAng, meanMotion, result.samples[0]),
+  }
+}
+
+/**
+ * Launching Δt later rotates the whole departure geometry by n_home·Δt while the target advances n_target·Δt,
+ * so the meeting point moves relative to the target by (n_home − n_target)·Δt. Undo the angular miss with the
+ * smallest shift (± whole synodic periods) that stays inside the launch window.
+ */
+function suggestLaunchShift(level: LevelDef, mission: MissionSystem, dAng: number, nTarget: number, launchTime: number): number | null {
+  const start = level.start
+  if (start.kind !== 'docked' || start.launchWindow[1] <= start.launchWindow[0]) return null
+  const home = mission.system.bodies[mission.indexOf(start.bodyId)]
+  if (!home.orbit) return null
+  const nHome = Math.sqrt(mission.system.centralMu / home.orbit.a ** 3)
+  const rel = nHome - nTarget
+  if (Math.abs(rel) < 1e-9) return null
+  const synodic = (2 * Math.PI) / Math.abs(rel)
+  const base = -dAng / rel
+  let best: number | null = null
+  for (let k = -3; k <= 3; k++) {
+    const shift = base + k * synodic
+    const at = launchTime + shift
+    if (at < start.launchWindow[0] - 1e-9 || at > start.launchWindow[1] + 1e-9) continue
+    if (best === null || Math.abs(shift) < Math.abs(best)) best = shift
+  }
+  return best
 }

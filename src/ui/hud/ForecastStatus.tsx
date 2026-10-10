@@ -38,24 +38,18 @@ export function describeOutcome(level: LevelDef, o: MissionOutcome): StatusView 
     case 'missed': {
       const m = o.miss
       const gen = genitive(target)
-      const canShiftLaunch = level.start.kind === 'docked' && level.start.launchWindow[1] > level.start.launchWindow[0]
       if (m?.kind === 'short')
         return { tone: 'warn', title: `Не долетаете до орбиты ${gen}`, detail: `Не хватает ${mkm(m.gap)}. Больше импульса вперёд поднимет орбиту.` }
       if (m?.kind === 'long')
         return { tone: 'warn', title: `Не опускаетесь до орбиты ${gen}`, detail: `Не хватает ${mkm(m.gap)}. Нужно сильнее затормозить.` }
       if (m?.kind === 'timing') {
         const d = Math.max(1, days(Math.abs(m.lag)))
-        return m.lag > 0
-          ? {
-              tone: 'warn',
-              title: `${target} опаздывает на ${d} дн.`,
-              detail: canShiftLaunch ? 'Планета придёт в точку встречи позже вас. Стартуйте позже.' : 'Планета придёт в точку встречи позже вас. Прилетите туда позже.',
-            }
-          : {
-              tone: 'warn',
-              title: `${target} прошла раньше на ${d} дн.`,
-              detail: canShiftLaunch ? 'Планета уже миновала точку встречи. Стартуйте раньше.' : 'Планета уже миновала точку встречи. Нужно прилететь раньше.',
-            }
+        const fact = m.lag > 0 ? 'Планета придёт в точку встречи позже вас.' : 'Планета уже прошла точку встречи.'
+        const advice =
+          m.launchShift !== null && Math.abs(days(m.launchShift)) >= 1
+            ? ` Попробуйте старт на ${Math.abs(days(m.launchShift))} дн. ${m.launchShift > 0 ? 'позже' : 'раньше'}.`
+            : ''
+        return { tone: 'warn', title: `${target}: разминулись на ${d} дн.`, detail: fact + advice }
       }
       const c = m?.kind === 'near' ? m.distance : o.closestToTarget?.distance
       const miss = c !== undefined ? Math.max(0, c - level.target.zoneRadius) : null
