@@ -77,10 +77,10 @@ async function run() {
   await wait(desk, 400)
   await desk.evaluate(() => {
     const w = globalThis as unknown as Win
-    w.__clock.seek(7.36)
-    w.__game.getState().setFlightPlaying(false)
+    w.__clock.seek(7.25)
+    w.__game.getState().setFlightSpeed(1)
   })
-  await wait(desk, 1500)
+  await wait(desk, 2600)
   await shoot(desk, 'desktop-4-flight')
   await desk.evaluate(() => {
     const w = globalThis as unknown as Win
@@ -101,10 +101,10 @@ async function run() {
   await wait(phone, 400)
   await phone.evaluate(() => {
     const w = globalThis as unknown as Win
-    w.__clock.seek(9.2)
-    w.__game.getState().setFlightPlaying(false)
+    w.__clock.seek(9.15)
+    w.__game.getState().setFlightSpeed(1)
   })
-  await wait(phone, 1500)
+  await wait(phone, 2600)
   await shoot(phone, 'phone-3-flight')
 
   await browser.close()
