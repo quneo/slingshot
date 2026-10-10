@@ -2,6 +2,7 @@ import type { BodyId } from '../levels/catalog'
 import type { MissionSystem } from '../levels/mission'
 import type { LevelDef } from '../levels/types'
 import type { ApproachPoint, PropagationResult } from '../physics/propagate'
+import { analyzeMiss, type MissAnalysis } from './miss'
 import { burnCount, impulseMagnitude, plannedDv, sortedNodes, type Plan } from './plan'
 
 const EPS = 1e-9
@@ -54,6 +55,8 @@ export interface MissionOutcome {
   collisionTime: number | null
   /** nodes scheduled after the trajectory ended */
   unexecutedNodeIds: string[]
+  /** for missed flights: what went wrong, in actionable terms */
+  miss: MissAnalysis | null
 }
 
 export function evaluateMission(
@@ -106,10 +109,13 @@ export function evaluateMission(
     }
   }
 
-  if (failure) return { ...base, success: false, failure, stars: 0 }
+  if (failure) {
+    const miss = failure === 'missed' || failure === 'escaped' ? analyzeMiss(level, mission, result) : null
+    return { ...base, success: false, failure, stars: 0, miss }
+  }
 
   let stars: 1 | 2 | 3 = 1
   if (spentDv <= level.stars.dvForTwo + EPS) stars = 2
   if (spentDv <= level.stars.dvForThree + EPS && flightTime <= level.stars.timeForThree + EPS) stars = 3
-  return { ...base, success: true, failure: null, stars }
+  return { ...base, success: true, failure: null, stars, miss: null }
 }

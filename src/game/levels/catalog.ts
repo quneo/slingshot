@@ -45,7 +45,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     mu: 2e-5,
     radius: 0.03,
     orbitRadius: 0.55,
-    visual: { sprite: 'planet-moon', color: '#A9B4C6', enlarge: 1.8 },
+    visual: { sprite: 'planet-moon', color: '#A9B4C6', enlarge: 2.0 },
   },
   aqua: {
     id: 'aqua',
@@ -54,7 +54,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     mu: 6e-5,
     radius: 0.05,
     orbitRadius: 1.0,
-    visual: { sprite: 'planet-aqua', color: '#4DCFF5', enlarge: 1.8 },
+    visual: { sprite: 'planet-aqua', color: '#4DCFF5', enlarge: 2.0 },
   },
   rubra: {
     id: 'rubra',
@@ -63,7 +63,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     mu: 4e-5,
     radius: 0.045,
     orbitRadius: 1.6,
-    visual: { sprite: 'planet-rubra', color: '#F08A5D', enlarge: 1.8 },
+    visual: { sprite: 'planet-rubra', color: '#F08A5D', enlarge: 2.0 },
   },
   colossus: {
     id: 'colossus',
@@ -72,7 +72,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     mu: 0.01,
     radius: 0.13,
     orbitRadius: 2.6,
-    visual: { sprite: 'planet-colossus', color: '#FFB64D', enlarge: 1.5 },
+    visual: { sprite: 'planet-colossus', color: '#FFB64D', enlarge: 1.1 },
   },
   aurum: {
     id: 'aurum',
@@ -81,7 +81,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     mu: 0.004,
     radius: 0.1,
     orbitRadius: 4.0,
-    visual: { sprite: 'planet-aurum', color: '#F3D58B', rings: true, enlarge: 1.5 },
+    visual: { sprite: 'planet-aurum', color: '#F3D58B', rings: true, enlarge: 1.3 },
   },
   borey: {
     id: 'borey',
@@ -90,7 +90,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     mu: 0.0025,
     radius: 0.085,
     orbitRadius: 5.6,
-    visual: { sprite: 'planet-borey', color: '#7FE3F0', enlarge: 1.6 },
+    visual: { sprite: 'planet-borey', color: '#7FE3F0', enlarge: 1.4 },
   },
   viola: {
     id: 'viola',
@@ -99,7 +99,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     mu: 0.0008,
     radius: 0.07,
     orbitRadius: 7.2,
-    visual: { sprite: 'planet-viola', color: '#B79CFF', enlarge: 1.7 },
+    visual: { sprite: 'planet-viola', color: '#B79CFF', enlarge: 1.6 },
   },
 }
 

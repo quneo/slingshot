@@ -61,6 +61,13 @@ export interface FlybyRecord extends ApproachPoint {
   /** heliocentric speed on entering / leaving the influence radius */
   speedIn: number
   speedOut: number
+  /** heliocentric specific orbital energy (star only) on entering / leaving */
+  energyIn: number
+  energyOut: number
+  /** |v_out − v_in|: how much the planet's gravity turned/changed the heliocentric velocity, for free */
+  deltaV: number
+  vxIn: number
+  vyIn: number
   /** false when the trajectory ended inside the influence radius */
   complete: boolean
 }
@@ -70,6 +77,9 @@ export interface BurnRecord {
   t: number
   x: number
   y: number
+  /** heliocentric velocity just before the burn (defines its local frame) */
+  vxBefore: number
+  vyBefore: number
   dvx: number
   dvy: number
   magnitude: number
@@ -169,7 +179,8 @@ export function propagate(input: PropagationInput): PropagationResult {
 
   const burns = [...input.burns].sort((a, b) => a.t - b.t)
   const burnRecords: BurnRecord[] = burns.map((b, index) => ({
-    index, t: b.t, x: NaN, y: NaN, dvx: 0, dvy: 0, magnitude: Math.hypot(b.prograde, b.radial), applied: false,
+    index, t: b.t, x: NaN, y: NaN, vxBefore: NaN, vyBefore: NaN, dvx: 0, dvy: 0,
+    magnitude: Math.hypot(b.prograde, b.radial), applied: false,
   }))
 
   const closest: (ApproachPoint | null)[] = new Array(nb).fill(null)
@@ -281,6 +292,8 @@ export function propagate(input: PropagationInput): PropagationResult {
 
   let releasedThisStep = false
 
+  const energyOf = (st: Float64Array) => 0.5 * (st[2] * st[2] + st[3] * st[3]) - system.centralMu / Math.hypot(st[0], st[1])
+
   /** Closest-approach and flyby bookkeeping over [ta, tb]. */
   const track = (s: StepEnds, speedA: number, speedB: number): void => {
     for (let i = 0; i < nb; i++) {
@@ -304,13 +317,18 @@ export function propagate(input: PropagationInput): PropagationResult {
       if (infR <= 0) continue
       const nowInside = rb.d < infR
       if (!inside[i] && nowInside) {
-        flybyOpen[i] = { ...ap, bodyIndex: i, tIn: s.tb, tOut: NaN, speedIn: speedA, speedOut: NaN, complete: false }
+        flybyOpen[i] = {
+          ...ap, bodyIndex: i, tIn: s.tb, tOut: NaN, speedIn: speedA, speedOut: NaN,
+          energyIn: energyOf(s.ya), energyOut: NaN, deltaV: 0, vxIn: s.ya[2], vyIn: s.ya[3], complete: false,
+        }
       }
       const open = flybyOpen[i]
       if (open && ap.distance < open.distance) Object.assign(open, ap)
       if (inside[i] && !nowInside && open) {
         open.tOut = s.tb
         open.speedOut = speedB
+        open.energyOut = energyOf(s.yb)
+        open.deltaV = Math.hypot(s.yb[2] - open.vxIn, s.yb[3] - open.vyIn)
         open.complete = true
         flybys.push(open)
         flybyOpen[i] = null
@@ -323,6 +341,8 @@ export function propagate(input: PropagationInput): PropagationResult {
     const b = burns[index]
     const rec = burnRecords[index]
     const { dvx, dvy } = burnToInertial(y[2], y[3], b.prograde, b.radial)
+    rec.vxBefore = y[2]
+    rec.vyBefore = y[3]
     y[2] += dvx
     y[3] += dvy
     rec.x = y[0]
@@ -436,6 +456,8 @@ export function propagate(input: PropagationInput): PropagationResult {
     if (open) {
       open.tOut = t
       open.speedOut = Math.hypot(y[2], y[3])
+      open.energyOut = energyOf(y)
+      open.deltaV = Math.hypot(y[2] - open.vxIn, y[3] - open.vyIn)
       flybys.push(open)
     }
   }

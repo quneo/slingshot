@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-space: #080f20;
+  --color-panel: #101b30;
+  --color-line: #2a4262;
+  --color-ink: #f4f7ff;
+  --color-ink-2: #a9bcd5;
+  --color-ink-3: #6f84a3;
+  --color-trail: #4dcff5;
+  --color-assist: #ffb64d;
+  --color-gold: #ffd27a;
+  --color-go: #37dca0;
+  --color-go-ink: #04261a;
+  --color-danger: #f47777;
+
+  --font-sans: 'Manrope Variable', 'Manrope', system-ui, sans-serif;
+  --font-display: 'Unbounded', 'Manrope Variable', system-ui, sans-serif;
+
+  --ease-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-rise: rise 220ms var(--ease-soft) both;
+  --animate-fade: fade 200ms ease-out both;
+  --animate-pop: pop 260ms var(--ease-soft) both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+    70% {
+      opacity: 1;
+      transform: scale(1.12);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    background: var(--color-space);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  canvas {
+    touch-action: none;
+    display: block;
+  }
+  button {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-trail);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* the only panel surface in the game: translucent navy glass */
+  .panel {
+    background: color-mix(in srgb, var(--color-panel) 84%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-line) 88%, transparent);
+    border-radius: 18px;
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    box-shadow: 0 18px 40px -24px rgb(0 0 0 / 0.8);
+  }
+  .panel-quiet {
+    background: color-mix(in srgb, var(--color-panel) 62%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+    border-radius: 14px;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  .hairline {
+    border-color: color-mix(in srgb, var(--color-line) 80%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+.scroll-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}

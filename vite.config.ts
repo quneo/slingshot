@@ -10,7 +10,7 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   worker: { format: 'es' },
-  server: { host: true, port: 5173 },
+  server: { host: true, port: Number(process.env.PORT) || 5173 },
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
