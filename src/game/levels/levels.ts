@@ -44,7 +44,7 @@ export const LEVELS: LevelDef[] = [
     ],
     hintBody: 'rubra',
     tutorial: ['drag-impulse', 'read-forecast', 'launch'],
-    camera: { x: 0, y: -0.1, radius: 1.9 },
+    camera: { x: 0.1, y: -0.4, radius: 1.75 },
   },
   {
     id: 'L2',
@@ -78,7 +78,7 @@ export const LEVELS: LevelDef[] = [
     hintBody: 'colossus',
     hintWindow: [5.3, 6.8],
     tutorial: ['launch-window'],
-    camera: { x: 0, y: 0, radius: 3 },
+    camera: { x: -0.3, y: -0.4, radius: 2.9 },
   },
   {
     id: 'L3',
@@ -113,7 +113,7 @@ export const LEVELS: LevelDef[] = [
     hintBody: 'colossus',
     hintWindow: [2.4, 3.2],
     tutorial: ['flyby', 'add-node'],
-    camera: { x: 0, y: 0.3, radius: 4.4 },
+    camera: { x: -0.8, y: 1.0, radius: 3.6 },
   },
   {
     id: 'L4',
@@ -146,7 +146,7 @@ export const LEVELS: LevelDef[] = [
       'Хватит меньше 1 км/с назад, в первые 100 дней полёта.',
     ],
     hintBody: 'colossus',
-    camera: { x: 0.4, y: 1.2, radius: 4.4 },
+    camera: { x: 0.3, y: 1.3, radius: 3.6 },
   },
   {
     id: 'L5',
@@ -180,7 +180,7 @@ export const LEVELS: LevelDef[] = [
     ],
     hintBody: 'colossus',
     hintWindow: [1.9, 2.2],
-    camera: { x: 0, y: 0.6, radius: 7.6 },
+    camera: { x: -1.4, y: 2.0, radius: 5.6 },
   },
 ]
 

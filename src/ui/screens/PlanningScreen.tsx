@@ -41,10 +41,14 @@ function MapTools({ vertical = false }: { vertical?: boolean }) {
   )
 }
 
-function ScaleNote() {
+function ScaleNote({ className }: { className?: string }) {
   const enlarged = useGame((s) => s.save.settings.enlargePlanets)
   if (!enlarged) return null
-  return <div className="text-[11.5px] font-semibold text-ink-3">Размеры планет не в масштабе</div>
+  return (
+    <div className={cn('panel-quiet pointer-events-none px-2.5 py-1 text-[11.5px] font-semibold text-ink-2', className)}>
+      Размеры планет не в масштабе
+    </div>
+  )
 }
 
 export function PlanningScreen() {
@@ -61,10 +65,7 @@ function WidePlanning({ onBack }: { onBack: () => void }) {
           <Button size="icon" onClick={onBack} aria-label="К выбору миссий" title="К выбору миссий">
             <ChevronLeft size={22} />
           </Button>
-          <div>
-            <Wordmark compact />
-            <ScaleNote />
-          </div>
+          <Wordmark compact />
         </div>
         <div className="pointer-events-auto flex items-start gap-2" data-inset="top">
           <DvMeter />
@@ -74,6 +75,7 @@ function WidePlanning({ onBack }: { onBack: () => void }) {
       <div className="relative flex min-h-0 flex-1 items-start justify-between">
         <MissionCard className="pointer-events-auto max-h-full overflow-y-auto" />
         <TutorialCoach className="absolute right-0 top-0 w-[380px]" />
+        <ScaleNote className="absolute bottom-0 right-0" />
       </div>
       <div className="pointer-events-auto">
         <Timeline className="mb-2" />
@@ -132,6 +134,7 @@ function CompactPlanning({ onBack }: { onBack: () => void }) {
       )}
       <div className="relative min-h-0 flex-1">
         {!missionOpen && <TutorialCoach compact className="absolute inset-x-0 top-0" />}
+        <ScaleNote className="absolute bottom-0 right-0 text-[11px]" />
       </div>
       <div className="pointer-events-auto space-y-2">
         <Timeline compact />

@@ -143,7 +143,7 @@ export function MissionSelect() {
 
       {!compact && (
         <div className="flex min-h-0 flex-1 gap-6">
-          <SelectedCard level={level} className="pointer-events-auto max-h-full overflow-y-auto" />
+          <SelectedCard level={level} className="pointer-events-auto max-h-full self-start overflow-y-auto" />
         </div>
       )}
       {compact && (

@@ -153,10 +153,13 @@ export function FlightHud() {
   const progressBar = (
     <div className="relative h-2 rounded-full bg-line/50" role="progressbar" aria-label="Ход полёта" aria-valuenow={Math.round(progress * 100)}>
       <div className="absolute inset-y-0 left-0 rounded-full bg-trail" style={{ width: `${Math.min(100, progress * 100)}%` }} />
-      {eventTimes(fc).map((e, i) => (
+      {eventTimes(fc).map((e, i, all) => (
         <button
           key={i}
-          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-space bg-assist"
+          className={cn(
+            'absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-space',
+            i < all.length - 1 ? 'bg-assist' : r.endReason === 'arrived' ? 'bg-go' : 'bg-danger',
+          )}
           style={{ left: `${((e - start) / Math.max(1e-9, r.endTime - start)) * 100}%` }}
           onClick={() => flightClock.seek(e - fromDays(3))}
           aria-label={`Перейти к ${days(e - start)}-му дню`}

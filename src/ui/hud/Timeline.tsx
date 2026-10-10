@@ -31,6 +31,7 @@ export function Timeline({ className, compact = false }: { className?: string; c
   const viewTime = useGame((s) => s.viewTime)
   const setViewTime = useGame((s) => s.setViewTime)
   const updateNode = useGame((s) => s.updateNode)
+  const addNode = useGame((s) => s.addNode)
   const select = useGame((s) => s.select)
   const beginGesture = useGame((s) => s.beginGesture)
   const endGesture = useGame((s) => s.endGesture)
@@ -97,6 +98,8 @@ export function Timeline({ className, compact = false }: { className?: string; c
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
+        onDoubleClick={(e) => addNode(timeAt(e.clientX) - t0)}
+        title="Двойной щелчок — коррекция в это время"
         role="slider"
         aria-label="Время на карте"
         aria-valuemin={0}

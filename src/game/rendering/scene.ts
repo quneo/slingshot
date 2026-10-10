@@ -76,6 +76,7 @@ export interface SceneHits {
   nodes: { id: string; x: number; y: number }[]
   handle: { id: string; ox: number; oy: number; tx: number; ty: number; px: number; py: number } | null
   planets: { id: BodyId; x: number; y: number; r: number }[]
+  ship: { x: number; y: number; r: number } | null
 }
 
 interface Star {
@@ -105,15 +106,16 @@ const ROCKS: Rock[] = [
   { fx: 0.86, fy: 0.86, size: 9, sprite: 6, spin: 0.08, phase: 3.1 },
   { fx: 0.91, fy: 0.92, size: 17, sprite: 2, spin: 0.06, phase: 1.7 },
   { fx: 0.99, fy: 0.9, size: 12, sprite: 7, spin: -0.1, phase: 0.1 },
-  { fx: 0.04, fy: 0.12, size: 10, sprite: 4, spin: 0.07, phase: 2.6 },
-  { fx: 0.08, fy: 0.07, size: 15, sprite: 2, spin: -0.05, phase: 1.4 },
 ]
 
 const DAY = (t: number) => Math.round(toDays(t))
 
+/** Campaign map only: square-root radial scale so the inner planets are not crammed around the star. */
+const menuWarp = (r: number) => 2.7 * Math.sqrt(r)
+
 export class Scene {
   readonly camera = new Camera()
-  hits: SceneHits = { path: null, nodes: [], handle: null, planets: [] }
+  hits: SceneHits = { path: null, nodes: [], handle: null, planets: [], ship: null }
   private readonly ctx: Ctx
   private dpr = 1
   private stars: Star[] = []
@@ -164,7 +166,7 @@ export class Scene {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     const { top, right, bottom, left } = cam.insets
     this.board.reset({ x: left + 4, y: top + 4, w: cam.width - left - right - 8, h: cam.height - top - bottom - 8 })
-    this.hits = { path: null, nodes: [], handle: null, planets: [] }
+    this.hits = { path: null, nodes: [], handle: null, planets: [], ship: null }
 
     this.drawBackground(nowSec, f.calm)
     const bodies = this.bodyScreens(f)
@@ -254,13 +256,15 @@ export class Scene {
   }
 
   private bodyScreens(f: SceneFrame) {
-    // the campaign map is a showcase: planets drawn extra large (no physics happens there)
-    const showcase = f.mode === 'menu' ? 1.75 : 1
+    // the campaign map is a showcase, not a simulation: planets drawn extra large and orbits spread out
+    const menu = f.mode === 'menu'
     return f.mission.ids.map((id, i) => {
       const st = bodyState(f.mission.system, i, f.time)
       const c = CATALOG[id]
-      const r = this.renderRadius(c, f.enlarge) * (c.orbitRadius === null ? Math.min(showcase, 1.3) : showcase)
-      return { id, i, c, x: this.camera.sx(st.x), y: this.camera.sy(st.y), wx: st.x, wy: st.y, r }
+      const r = this.renderRadius(c, f.enlarge) * (menu ? (c.orbitRadius === null ? 1.3 : 1.75) : 1)
+      const d = Math.hypot(st.x, st.y)
+      const k = menu && d > 0 ? menuWarp(d) / d : 1
+      return { id, i, c, x: this.camera.sx(st.x * k), y: this.camera.sy(st.y * k), wx: st.x, wy: st.y, r }
     })
   }
 
@@ -271,8 +275,9 @@ export class Scene {
     for (const b of bodies) {
       if (b.c.orbitRadius === null) continue
       const isTarget = f.mode !== 'menu' && b.id === f.level.target.bodyId
+      const radius = f.mode === 'menu' ? menuWarp(b.c.orbitRadius) : b.c.orbitRadius
       ctx.beginPath()
-      ctx.arc(cx, cy, b.c.orbitRadius * this.camera.zoom, 0, Math.PI * 2)
+      ctx.arc(cx, cy, radius * this.camera.zoom, 0, Math.PI * 2)
       ctx.strokeStyle = isTarget ? withAlpha(COLORS.gold, 0.28) : COLORS.orbit
       ctx.lineWidth = isTarget ? 1.4 : 1
       ctx.stroke()
@@ -359,8 +364,9 @@ export class Scene {
         arrowHead(ctx, cx + Math.cos(-a1) * R, cy + Math.sin(-a1) * R, tangent, 9, withAlpha(e.color, 0.8))
         // ghost
         const img = this.assets.planets[b.id]
-        if (b.c.visual.rings) drawRingedPlanet(ctx, img, this.assets.rings, gx, gy, b.r, null, b.c.visual.color, 0.36)
-        else drawPlanetDisc(ctx, img, gx, gy, b.r, null, b.c.visual.color, 0.36)
+        if (b.c.visual.rings) drawRingedPlanet(ctx, img, this.assets.rings, gx, gy, b.r, null, b.c.visual.color, 0.5)
+        else drawPlanetDisc(ctx, img, gx, gy, b.r, null, b.c.visual.color, 0.5)
+        this.board.reserve({ x: gx - b.r - 4, y: gy - b.r - 4, w: b.r * 2 + 8, h: b.r * 2 + 8 })
         ring(ctx, gx, gy, b.r + 2, withAlpha(e.color, 0.5), 1)
         setFont(ctx, 11.5, 650)
         ctx.textAlign = 'center'
@@ -669,7 +675,7 @@ export class Scene {
       y = cam.sy(s.y)
       angle = Math.atan2(-s.vy, s.vx)
     }
-    const length = Math.min(46, Math.max(28, cam.zoom * 0.11))
+    const length = Math.min(52, Math.max(f.mode === 'plan' ? 28 : 36, cam.zoom * 0.12))
     if (f.level.start.kind === 'docked' && f.time <= t0 + 1e-6) {
       // waiting at the home planet: park the ship on its rim, nose along the launch direction
       const hr = this.renderRadius(CATALOG[f.level.start.bodyId], f.enlarge)
@@ -679,10 +685,24 @@ export class Scene {
       const rvy = s0[4] - home.vy
       // launch Δv direction, or the planet's motion when there is no impulse yet
       const a = Math.hypot(rvx, rvy) > 1e-9 ? Math.atan2(-rvy, rvx) : Math.atan2(-home.vy, home.vx)
-      drawShip(this.ctx, this.assets.ship, x + Math.cos(a) * (hr + length * 0.35), y + Math.sin(a) * (hr + length * 0.35), a, length * 0.8, 0, nowSec)
+      const sx = x + Math.cos(a) * (hr + length * 0.35)
+      const sy = y + Math.sin(a) * (hr + length * 0.35)
+      drawShip(this.ctx, this.assets.ship, sx, sy, a, length * 0.8, 0, nowSec)
+      this.hits.ship = { x: sx, y: sy, r: length * 0.45 }
       return
     }
+    if (f.mode !== 'plan') {
+      // soft beacon so the small ship never gets lost against a planet
+      const g = this.ctx.createRadialGradient(x, y, 0, x, y, length * 0.9)
+      g.addColorStop(0, withAlpha(COLORS.cyan, 0.28))
+      g.addColorStop(1, withAlpha(COLORS.cyan, 0))
+      this.ctx.fillStyle = g
+      this.ctx.beginPath()
+      this.ctx.arc(x, y, length * 0.9, 0, Math.PI * 2)
+      this.ctx.fill()
+    }
     drawShip(this.ctx, this.assets.ship, x, y, angle, length, f.thrust, nowSec)
+    this.hits.ship = { x, y, r: length * 0.45 }
   }
 
   private drawTargetLabel(f: SceneFrame, bodies: ReturnType<Scene['bodyScreens']>): void {

@@ -175,6 +175,11 @@ export class Interaction {
       this.h.onSelect(node.id)
       return
     }
+    // tapping the ship selects its launch impulse
+    if (hits.ship && this.h.canEdit() && Math.hypot(hits.ship.x - x, hits.ship.y - y) <= Math.max(hits.ship.r, this.radius(type, 12))) {
+      this.h.onSelect('launch')
+      return
+    }
     if (this.h.planetsInteractive()) {
       const planet = hits.planets.find((pl) => Math.hypot(pl.x - x, pl.y - y) <= Math.max(pl.r, this.radius(type, 14)))
       if (planet) {
