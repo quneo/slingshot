@@ -39,8 +39,20 @@ function Difficulty({ value }: { value: number }) {
 function SelectedCard({ level, className }: { level: LevelDef; className?: string }) {
   const save = useGame((s) => s.save)
   const prog = levelProgress(save, level.id)
+  const allDone = LEVELS.every((l) => levelProgress(save, l.id).completed)
+  const stars = LEVELS.reduce((sum, l) => sum + levelProgress(save, l.id).stars, 0)
   return (
     <section className={cn('panel w-[330px] space-y-4 p-5', className)} data-inset="left" aria-label="Выбранная миссия">
+      {allDone && (
+        <div className="rounded-xl border border-gold/50 bg-gold/[0.07] px-3 py-2.5 text-[13px] leading-snug">
+          <div className="font-extrabold text-gold">Кампания пройдена</div>
+          <div className="text-ink-2">
+            {stars < LEVELS.length * 3
+              ? `Звёзд: ${stars} из ${LEVELS.length * 3}. Экономнее маршрут — больше звёзд.`
+              : 'Все звёзды собраны. Вы настоящий мастер гравитационных манёвров.'}
+          </div>
+        </div>
+      )}
       <div className="flex items-baseline justify-between text-[12.5px] text-ink-2">
         <span className="font-semibold">Кампания</span>
         <span className="num">
