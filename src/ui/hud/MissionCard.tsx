@@ -15,7 +15,7 @@ export function goalText(level: LevelDef): string {
   const zone = mkm(level.target.zoneRadius)
   if (level.target.kind === 'flyby') return `Пройти ближе ${zone} от центра планеты`
   const rel = toKms(level.target.maxRelSpeed ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })
-  return `Подойти ближе ${zone} и уравнять скорость: разница не больше ${rel} км/с`
+  return `Подойти ближе ${zone} и уравнять скорость: разница не больше ${rel} км/с`
 }
 
 export function burnsText(level: LevelDef): string {

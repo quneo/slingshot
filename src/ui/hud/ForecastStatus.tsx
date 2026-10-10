@@ -89,7 +89,7 @@ export function describeOutcome(level: LevelDef, o: MissionOutcome): StatusView 
         title: 'Скорости не совпали',
         detail:
           rel !== null
-            ? `В кольце цели разница скоростей ${fmtKms(rel)} км/с, а нужно не больше ${fmtKms(max)}. Добавьте импульс, чтобы уравнять скорость с ${dativeInstr(target)}.`
+            ? `В кольце цели разница скоростей ${fmtKms(rel)} км/с, а нужно не больше ${fmtKms(max)}. Добавьте импульс, чтобы уравнять скорость с ${dativeInstr(target)}.`
             : 'Корабль проходит кольцо цели слишком быстро.',
       }
     }
