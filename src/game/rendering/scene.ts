@@ -336,6 +336,9 @@ export class Scene {
     const tTarget = result.arrival?.t ?? (miss && miss.kind !== 'short' && miss.kind !== 'long' ? miss.t : result.closest[targetIndex]?.t)
     if (tTarget !== undefined) encounters.push({ index: targetIndex, t: tTarget, color: COLORS.gold })
     for (const fb of result.flybys) if (fb.bodyIndex !== targetIndex) encounters.push({ index: fb.bodyIndex, t: fb.t, color: COLORS.amber })
+    // a missed slingshot: where the helper planet is when the ship crosses its orbit
+    const helper = miss?.assist
+    if (helper && helper.miss.kind === 'timing') encounters.push({ index: f.mission.indexOf(helper.bodyId), t: helper.miss.t, color: COLORS.amber })
 
     for (const e of encounters) {
       const b = bodies[e.index]
@@ -469,8 +472,11 @@ export class Scene {
     const { result, outcome } = active
     const ti = f.mission.indexOf(f.level.target.bodyId)
     const target = bodies[ti]
-    const m = outcome.miss
-    if (!m) return
+    const report = outcome.miss
+    if (!report) return
+    // slingshot levels: talk about the helper planet the ship failed to meet
+    const helperTiming = report.assist?.miss.kind === 'timing' ? report.assist : null
+    const m = helperTiming ? helperTiming.miss : report
     const x = cam.sx(m.x)
     const y = cam.sy(m.y)
     const t0 = result.samples[0]
@@ -486,19 +492,22 @@ export class Scene {
       const a = target.c.orbitRadius ?? r
       ctx.lineTo(cam.sx((m.x / r) * a), cam.sy((m.y / r) * a))
     } else {
-      const tp = bodyState(f.mission.system, ti, m.t)
+      const bi = helperTiming ? f.mission.indexOf(helperTiming.bodyId) : ti
+      const tp = bodyState(f.mission.system, bi, m.t)
       ctx.lineTo(cam.sx(tp.x), cam.sy(tp.y))
     }
     ctx.stroke()
     ctx.restore()
     ring(ctx, x, y, 5, COLORS.red, 2, COLORS.bg)
-    const name = target.c.name
+    const name = helperTiming ? CATALOG[helperTiming.bodyId].name : target.c.name
     let lines: string[]
     if (m.kind === 'short') lines = [`Не долетаете до орбиты`, `не хватает ${fmtMkm(m.gap)}`]
     else if (m.kind === 'long') lines = [`Не опускаетесь до орбиты`, `не хватает ${fmtMkm(m.gap)}`]
     else if (m.kind === 'timing') {
       const d = Math.max(1, DAY(Math.abs(m.lag)))
-      lines = m.lag > 0 ? ['Здесь встреча не выйдет', `${name} будет здесь через ${d} дн.`] : ['Здесь встреча не выйдет', `${name} прошла здесь ${d} дн. назад`]
+      const head = helperTiming ? `Здесь нужна праща у ${genitive(name)}` : 'Здесь встреча не выйдет'
+      const passed = name.endsWith('а') ? 'прошла' : 'прошёл'
+      lines = m.lag > 0 ? [head, `${name} будет рядом через ${d} дн.`] : [head, `${name} ${passed} здесь ${d} дн. назад`]
     } else lines = ['Промах', `${fmtMkm(Math.max(0, m.distance - f.level.target.zoneRadius))} до кольца цели, ${DAY(m.t - t0)}-й день`]
     callout(ctx, x, y, { color: COLORS.red, title: true, lines, board: this.board })
   }
