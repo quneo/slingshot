@@ -10,6 +10,14 @@
 Всё, что видно на карте, посчитано численным интегрированием. Игрок не рисует путь — только задаёт физически
 допустимые параметры: дату старта, величину и направление импульсов.
 
+| Выбор миссии | Планирование с пращой | Полёт |
+| --- | --- | --- |
+| ![Выбор миссии](docs/screenshots/desktop-1-missions.png) | ![Планирование](docs/screenshots/desktop-3-plan-slingshot.png) | ![Полёт](docs/screenshots/desktop-4-flight.png) |
+
+| Промах с подсказкой | Результат | Телефон |
+| --- | --- | --- |
+| ![Промах](docs/screenshots/desktop-2-plan-miss.png) | ![Результат](docs/screenshots/desktop-5-result.png) | ![Телефон](docs/screenshots/phone-2-plan.png) |
+
 ## Запуск
 
 ```bash
@@ -23,7 +31,9 @@ npm run e2e        # сквозные сценарии в браузере (Play
 `npm run e2e` по умолчанию запускает системный Microsoft Edge (`channel: 'msedge'`), чтобы не скачивать браузер;
 другой канал — через переменную `PW_CHANNEL` (например, `PW_CHANNEL=chrome`).
 
-Требуется Node 20+. Бэкенда нет, прогресс и настройки хранятся в `localStorage` (ключ `slingshot:save`, схема
+Требуется Node 20+. Для публикации на GitHub Pages есть workflow `.github/workflows/pages.yml` (в настройках
+репозитория: Pages → Source: GitHub Actions); сборка учитывает путь `/<имя репозитория>/` через `BASE_PATH`.
+Скриншоты в `docs/screenshots` снимаются скриптом `tools/screenshots.ts` (нужен запущенный `npx vite --port 5318`). Бэкенда нет, прогресс и настройки хранятся в `localStorage` (ключ `slingshot:save`, схема
 версионируется в `src/state/persistence.ts`).
 
 ## Как играть

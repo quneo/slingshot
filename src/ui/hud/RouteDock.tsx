@@ -77,8 +77,9 @@ export function LaunchButton({ className }: { className?: string }) {
 
 /** Bottom panel: the route as a sequence of burns, the editor of the selected one, and the launch button. */
 export function RouteDock({ compact = false }: { compact?: boolean }) {
-  const [editorOpen, setEditorOpen] = useState(!compact)
   const level = getLevel(useGame((s) => s.levelId))
+  // phones keep the map large; the editor opens on tap, except when the lesson is about the launch date
+  const [editorOpen, setEditorOpen] = useState(!compact || !!level.tutorial?.includes('launch-window'))
   const plan = useGame((s) => s.plan)
   const selection = useGame((s) => s.selection)
   const select = useGame((s) => s.select)

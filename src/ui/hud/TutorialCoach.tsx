@@ -26,8 +26,8 @@ const TEXT: Record<TutorialStep, { title: string; body: string }> = {
     body: 'Пролёт рядом с Колоссом меняет скорость без топлива. Пройдите позади него, по ходу его движения — и Аурум станет ближе.',
   },
   'add-node': {
-    title: 'Коррекция в пути',
-    body: 'Нажмите на пунктир, чтобы поставить ещё один импульс в этой точке маршрута.',
+    title: 'Можно точнее',
+    body: 'Нажмите на пунктир, чтобы поставить коррекцию в этой точке пути — так можно поправить курс после пращи.',
   },
 }
 
@@ -51,7 +51,7 @@ export function TutorialCoach({ className, compact = false }: { className?: stri
     const done =
       (current === 'drag-impulse' && planKey(plan) !== initial) ||
       ((current === 'read-forecast' || current === 'launch-window' || current === 'flyby') && success) ||
-      (current === 'add-node' && (plan.nodes.length > 0 || success))
+      (current === 'add-node' && plan.nodes.length > 0)
     if (done) {
       if (step + 1 >= steps.length) finish()
       else advance(step + 1)

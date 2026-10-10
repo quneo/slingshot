@@ -95,6 +95,7 @@ function thrustAt(fc: PredictResponse, level: LevelDef, t: number): number {
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [failed, setFailed] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -109,6 +110,7 @@ export function GameCanvas() {
         if (disposed) return
         const scene = new Scene(canvas, assets)
         sceneBridge.scene = scene
+        setReady(true)
         const tmp = newSample()
 
         const resize = () => {
@@ -304,6 +306,11 @@ export function GameCanvas() {
   return (
     <div className="absolute inset-0">
       <canvas ref={canvasRef} aria-label="Карта звёздной системы" role="img" />
+      {!ready && !failed && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center text-[13px] font-semibold text-ink-2 animate-fade">
+          Загружаю систему Лира…
+        </div>
+      )}
       {failed && (
         <div className="absolute inset-0 grid place-items-center p-6 text-center text-danger">
           Не удалось загрузить графику игры: {failed}
