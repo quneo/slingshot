@@ -1,4 +1,4 @@
-import { Lock, Play, Settings } from 'lucide-react'
+import { Lock, Play, Rocket, Settings } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { LEVELS, getLevel } from '../../game/levels/levels'
 import type { LevelDef } from '../../game/levels/types'
@@ -17,7 +17,7 @@ function RoutePreview({ level }: { level: LevelDef }) {
   const from = START_BODY(level)
   return (
     <div className="panel-quiet relative flex h-[92px] items-center justify-between overflow-hidden px-5">
-      {from ? <PlanetThumb id={from} size={44} /> : <span className="grid h-11 w-11 place-items-center text-[11px] font-bold text-trail">зонд</span>}
+      {from ? <PlanetThumb id={from} size={44} /> : <Rocket size={34} className="text-trail" aria-label="Зонд в полёте" />}
       <svg className="absolute inset-x-16 top-1/2 h-12 -translate-y-1/2" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden>
         <path d="M2 30 Q 50 -6 98 22" fill="none" stroke="#4DCFF5" strokeWidth="1.6" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
       </svg>
@@ -101,7 +101,7 @@ function MissionTile({ level, selected, onClick }: { level: LevelDef; selected: 
       </span>
       {locked && <Lock size={15} className="absolute right-2.5 top-2.5 text-ink-2" aria-label="Закрыта" />}
       <span className="mt-1 flex items-center">
-        {from && <PlanetThumb id={from} size={24} />}
+        {from ? <PlanetThumb id={from} size={24} /> : <Rocket size={20} className="text-trail" aria-hidden />}
         <span className="mx-0.5 h-px w-4 border-t border-dashed border-trail/70" />
         <PlanetThumb id={level.target.bodyId} size={36} />
       </span>
