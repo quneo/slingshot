@@ -632,7 +632,14 @@ export class Scene {
     setFont(ctx, 10.5, 650)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    haloText(ctx, 'вперёд', x + px * (maxR + 22), y - py * (maxR + 22), COLORS.text2, 0.8)
+    const fx = x + px * (maxR + 22)
+    const fy = y - py * (maxR + 22)
+    const fw = ctx.measureText('вперёд').width + 6
+    const fr = { x: fx - fw / 2, y: fy - 8, w: fw, h: 16 }
+    if (this.board.fits(fr)) {
+      haloText(ctx, 'вперёд', fx, fy, COLORS.text2, 0.8)
+      this.board.reserve(fr)
+    }
 
     // the Δv arrow
     if (mag > 1e-9) {
