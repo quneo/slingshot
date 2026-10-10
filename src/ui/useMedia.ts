@@ -12,3 +12,16 @@ function subscribe(cb: () => void) {
 export function useCompact(): boolean {
   return useSyncExternalStore(subscribe, () => window.matchMedia(QUERY).matches, () => false)
 }
+
+const SHORT = '(max-height: 520px) and (orientation: landscape)'
+
+function subscribeShort(cb: () => void) {
+  const mq = window.matchMedia(SHORT)
+  mq.addEventListener('change', cb)
+  return () => mq.removeEventListener('change', cb)
+}
+
+/** Phone held sideways: very little height, plenty of width. */
+export function useShortLandscape(): boolean {
+  return useSyncExternalStore(subscribeShort, () => window.matchMedia(SHORT).matches, () => false)
+}

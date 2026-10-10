@@ -11,7 +11,7 @@ import { Button } from '../components/button'
 import { describeOutcome } from '../hud/ForecastStatus'
 import { Stars } from '../hud/Stars'
 import { daysLabel, kms, kmsNumber } from '../format'
-import { useCompact } from '../useMedia'
+import { useCompact, useShortLandscape } from '../useMedia'
 
 function AttemptRow({ label, a, highlight }: { label: string; a: AttemptSummary | null; highlight?: boolean }) {
   return (
@@ -35,6 +35,7 @@ function AttemptRow({ label, a, highlight }: { label: string; a: AttemptSummary 
 
 export function ResultPanel() {
   const compact = useCompact()
+  const short = useShortLandscape()
   const report = useGame((s) => s.report)
   const replay = useGame((s) => s.replayFlight)
   const backToPlanning = useGame((s) => s.backToPlanning)
@@ -138,10 +139,19 @@ export function ResultPanel() {
 
   if (compact) {
     return (
-      <div className="pointer-events-none absolute inset-0 flex flex-col p-2 pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-0 flex p-2 pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]',
+          short ? 'flex-row items-start justify-between gap-3' : 'flex-col',
+        )}
+      >
         {header}
-        <div className="flex-1" />
-        <section className="panel pointer-events-auto p-4 animate-rise" data-inset="bottom" aria-label="Результат">
+        {!short && <div className="flex-1" />}
+        <section
+          className={cn('panel pointer-events-auto p-4 animate-rise', short && 'max-h-full w-[360px] shrink-0 overflow-y-auto')}
+          data-inset={short ? 'right' : 'bottom'}
+          aria-label="Результат"
+        >
           <div className="flex items-center justify-between gap-3">
             <Stars value={outcome.stars} size={30} animate />
             <div className="num text-right text-[13px] leading-snug">

@@ -13,7 +13,7 @@ import { Timeline } from '../hud/Timeline'
 import { TutorialCoach } from '../hud/TutorialCoach'
 import { Wordmark } from '../hud/Wordmark'
 import { sceneBridge } from '../sceneBridge'
-import { useCompact } from '../useMedia'
+import { useCompact, useShortLandscape } from '../useMedia'
 
 function MapTools({ vertical = false }: { vertical?: boolean }) {
   const undo = useGame((s) => s.undo)
@@ -88,9 +88,28 @@ function WidePlanning({ onBack }: { onBack: () => void }) {
 function CompactPlanning({ onBack }: { onBack: () => void }) {
   const level = getLevel(useGame((s) => s.levelId))
   const [missionOpen, setMissionOpen] = useState(false)
+  const short = useShortLandscape()
   const target = CATALOG[level.target.bodyId]
   const { view } = useForecastView()
   const tone = { ok: 'text-go', warn: 'text-assist', bad: 'text-danger', wait: 'text-ink-2' }[view.tone]
+  const missionChip = (
+    <button
+      className={cn('panel pointer-events-auto flex min-w-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left', short ? 'h-11 flex-1 py-1' : 'w-full')}
+      onClick={() => setMissionOpen((o) => !o)}
+      aria-expanded={missionOpen}
+    >
+      <PlanetThumb id={target.id} size={short ? 24 : 30} />
+      <div className="min-w-0 flex-1">
+        <div className={cn('truncate font-extrabold', short ? 'text-[12px]' : 'text-[13px]')}>
+          {level.number}. {level.title}
+        </div>
+        <div className={cn('truncate font-semibold', short ? 'text-[11.5px]' : 'text-[12.5px]', tone)} aria-live="polite">
+          {view.title}
+        </div>
+      </div>
+      <ChevronDown size={18} className={cn('shrink-0 text-ink-2 transition-transform duration-200', missionOpen && 'rotate-180')} aria-hidden />
+    </button>
+  )
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col gap-2 p-2 pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
       <div className="space-y-2" data-inset="top">
@@ -98,30 +117,16 @@ function CompactPlanning({ onBack }: { onBack: () => void }) {
           <Button size="icon" onClick={onBack} aria-label="К выбору миссий">
             <ChevronLeft size={22} />
           </Button>
-          <div className="min-w-0 flex-1">
+          {short && missionChip}
+          <div className={short ? 'w-[190px] shrink-0' : 'min-w-0 flex-1'}>
             <DvMeter compact />
           </div>
           <MapToolsCompact />
         </header>
-        <button
-          className="panel pointer-events-auto flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left"
-          onClick={() => setMissionOpen((o) => !o)}
-          aria-expanded={missionOpen}
-        >
-          <PlanetThumb id={target.id} size={30} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-extrabold">
-              {level.number}. {level.title}
-            </div>
-            <div className={cn('truncate text-[12.5px] font-semibold', tone)} aria-live="polite">
-              {view.title}
-            </div>
-          </div>
-          <ChevronDown size={18} className={cn('shrink-0 text-ink-2 transition-transform duration-200', missionOpen && 'rotate-180')} aria-hidden />
-        </button>
+        {!short && missionChip}
       </div>
       {missionOpen && (
-        <div className="panel pointer-events-auto max-h-[50vh] space-y-3 overflow-y-auto p-4 animate-rise">
+        <div className={cn('panel pointer-events-auto space-y-3 overflow-y-auto p-4 animate-rise', short ? 'max-h-[60vh] w-[min(420px,100%)]' : 'max-h-[50vh]')}>
           <p className="text-[13.5px] leading-snug text-ink-2">{level.briefing}</p>
           <div className="text-[13px]">
             <span className="text-ink-2">Цель — {target.name}: </span>
@@ -133,11 +138,11 @@ function CompactPlanning({ onBack }: { onBack: () => void }) {
         </div>
       )}
       <div className="relative min-h-0 flex-1">
-        {!missionOpen && <TutorialCoach compact className="absolute inset-x-0 top-0" />}
+        {!missionOpen && <TutorialCoach compact className={cn('absolute top-0', short ? 'right-0 w-[360px]' : 'inset-x-0')} />}
         <ScaleNote className="absolute bottom-0 right-0 text-[11px]" />
       </div>
       <div className="pointer-events-auto space-y-2">
-        <Timeline compact />
+        {!short && <Timeline compact />}
         <RouteDock compact />
       </div>
     </div>
