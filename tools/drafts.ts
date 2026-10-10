@@ -134,4 +134,19 @@ export const DRAFTS: Draft[] = [
       { id: 'viola', dir: 'out', offset: 0, after: 1 },
     ],
   },
+  {
+    level: base({
+      id: 'L6',
+      title: 'Мягкая встреча',
+      bodies: [b('cinder', 300), b('aqua', 130), b('rubra', 0), b('colossus', 250), b('aurum', 40), b('borey', 200)],
+      start: { kind: 'docked', bodyId: 'aqua', launchWindow: [0, 8] },
+      target: { bodyId: 'rubra', kind: 'rendezvous', zoneRadius: 0.12, maxRelSpeed: 0.04 },
+      budget: 0.3,
+      maxBurns: 2,
+      maxFlightTime: 7,
+      horizon: 7.5,
+    }),
+    plan: { launchTime: 2, launch: { prograde: 0.112, radial: 0 }, nodes: [{ id: 'm', dt: 4.55, prograde: 0.09, radial: 0 }] },
+    placements: [{ id: 'rubra', dir: 'out', offset: 0.02 }],
+  },
 ]

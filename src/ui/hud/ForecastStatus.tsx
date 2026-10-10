@@ -81,8 +81,18 @@ export function describeOutcome(level: LevelDef, o: MissionOutcome): StatusView 
         detail: miss !== null ? `До кольца цели вокруг ${gen} не хватает совсем немного.` : undefined,
       }
     }
-    case 'too-fast':
-      return { tone: 'warn', title: 'Слишком быстро', detail: 'Корабль проносится мимо, не сбросив скорость.' }
+    case 'too-fast': {
+      const rel = o.fastPass ? toKms(o.fastPass.relSpeed) : null
+      const max = toKms(level.target.maxRelSpeed ?? 0)
+      return {
+        tone: 'warn',
+        title: 'Скорости не совпали',
+        detail:
+          rel !== null
+            ? `В кольце цели разница скоростей ${fmtKms(rel)} км/с, а нужно не больше ${fmtKms(max)}. Добавьте импульс, чтобы уравнять скорость с ${dativeInstr(target)}.`
+            : 'Корабль проходит кольцо цели слишком быстро.',
+      }
+    }
     case 'over-budget':
       return { tone: 'bad', title: 'Бюджет Δv превышен' }
     case 'too-many-burns':
@@ -142,6 +152,10 @@ export function ForecastStatus({ compact = false }: { compact?: boolean }) {
     </div>
   )
 }
+
+const INSTRUMENTAL: Record<string, string> = { Рубра: 'Руброй', Аква: 'Аквой', Колосс: 'Колоссом', Аурум: 'Аурумом', Виола: 'Виолой', Борей: 'Бореем', Пепел: 'Пеплом' }
+const dativeInstr = (name: string) => INSTRUMENTAL[name] ?? name
+const fmtKms = (v: number) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(v)
 
 const DATIVE: Record<string, string> = { Колосс: 'Колоссу', Аурум: 'Ауруму', Борей: 'Борею', Рубра: 'Рубре', Аква: 'Акве', Виола: 'Виоле', Пепел: 'Пеплу' }
 const dativeOf = (name: string) => DATIVE[name] ?? name

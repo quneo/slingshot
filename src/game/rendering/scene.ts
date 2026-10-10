@@ -464,6 +464,18 @@ export class Scene {
     } else if (f.mode !== 'flight' || f.time >= result.endTime) {
       this.drawMiss(f, active, bodies)
     }
+    if (outcome.failure === 'too-fast' && outcome.fastPass && outcome.fastPass.t <= visibleUntil) {
+      const fp = outcome.fastPass
+      const x = cam.sx(fp.x)
+      const y = cam.sy(fp.y)
+      ring(ctx, x, y, 6, COLORS.amber, 2, COLORS.bg)
+      callout(ctx, x, y, {
+        color: COLORS.amber,
+        title: true,
+        lines: ['Скорости не совпали', `разница ${fmtKms(toKms(fp.relSpeed))}, нужно не больше ${fmtKms(toKms(f.level.target.maxRelSpeed ?? 0))}`],
+        board: this.board,
+      })
+    }
   }
 
   private drawMiss(f: SceneFrame, active: PredictResponse, bodies: ReturnType<Scene['bodyScreens']>): void {
@@ -727,7 +739,7 @@ export class Scene {
   private drawMenuOverlay(f: SceneFrame, bodies: ReturnType<Scene['bodyScreens']>, nowSec: number): void {
     const markers = f.menuMarkers ?? []
     const ctx = this.ctx
-    const pos = (id: BodyId) => bodies.find((b) => b.id === id)!
+    const pos = (id: BodyId) => bodies.find((b) => b.id === id) ?? bodies[0]
     // campaign route: home → mission targets in order
     const route = [pos('aqua'), ...markers.map((m) => pos(m.bodyId))]
     ctx.save()

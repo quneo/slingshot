@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 /**
  * Plays the whole campaign through the UI only (no debug handles): every mission is solvable with the
@@ -33,7 +34,7 @@ test('the whole campaign can be won through the interface', async ({ page }, inf
     if (!sessionStorage.getItem('seeded')) {
       localStorage.setItem(
         'slingshot:save',
-        JSON.stringify({ version: 1, settings: {}, progress: {}, tutorialDone: ['L1', 'L2', 'L3', 'L4', 'L5'] }),
+        JSON.stringify({ version: 1, settings: {}, progress: {}, tutorialDone: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6'] }),
       )
       sessionStorage.setItem('seeded', '1')
     }
@@ -74,6 +75,17 @@ test('the whole campaign can be won through the interface', async ({ page }, inf
   await setSlider(page, 'Дата старта', 117)
   await setNumber(page, 'Импульс', '7,67')
   await expect(page.getByText('Виола: цель достигнута').first()).toBeVisible()
+  await flyAndWin(page)
+  await page.getByRole('button', { name: 'Далее' }).click()
+
+  // 6. rendezvous: one burn is a fly-past, the second one matches Rubra's speed
+  await setSlider(page, 'Дата старта', 117)
+  await setNumber(page, 'Импульс', '3,05')
+  await expect(page.getByText('Скорости не совпали').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Добавить коррекцию' }).click()
+  await setSlider(page, 'Время импульса', 255)
+  await setNumber(page, 'Импульс', '2,47')
+  await expect(page.getByText('Рубра: цель достигнута').first()).toBeVisible()
   await flyAndWin(page)
 
   // campaign complete, progress saved

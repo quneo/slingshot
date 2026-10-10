@@ -67,7 +67,11 @@ export async function optimize(
     population: burns >= 2 ? 50 : 30,
     generations: burns >= 2 ? 160 : 100,
     seed,
-    seeds: burns >= 2 ? [] : [seedVec],
+    seeds: burns >= 2 && plan.nodes[0]
+      ? [[...seedVec, plan.nodes[0].dt, Math.hypot(plan.nodes[0].prograde, plan.nodes[0].radial), Math.atan2(plan.nodes[0].radial, plan.nodes[0].prograde)]]
+      : burns >= 2
+        ? []
+        : [seedVec],
     log: true,
   })
   const bestPlan = decode(level, best.x, burns)

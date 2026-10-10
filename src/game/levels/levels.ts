@@ -182,6 +182,45 @@ export const LEVELS: LevelDef[] = [
     hintWindow: [1.9, 2.2],
     camera: { x: -1.4, y: 2.0, radius: 5.6 },
   },
+  {
+    id: 'L6',
+    number: 6,
+    title: 'Мягкая встреча',
+    summary: 'Догнать Рубру и уравнять с ней скорость',
+    briefing:
+      'Мало долететь — нужно остаться рядом. Догоните Рубру и вторым импульсом уравняйте с ней скорость, чтобы встретиться, а не пролететь мимо.',
+    difficulty: 3,
+    bodies: [
+      { id: 'cinder', phaseDeg: 300 },
+      { id: 'aqua', phaseDeg: 130 },
+      { id: 'rubra', phaseDeg: 240.158266181 },
+      { id: 'colossus', phaseDeg: 250 },
+      { id: 'aurum', phaseDeg: 40 },
+      { id: 'borey', phaseDeg: 200 },
+    ],
+    start: { kind: 'docked', bodyId: 'aqua', launchWindow: [0, 8] },
+    target: { bodyId: 'rubra', kind: 'rendezvous', zoneRadius: 0.12, maxRelSpeed: 0.04 },
+    budget: 0.2,
+    maxBurns: 2,
+    maxFlightTime: 7,
+    horizon: 7.5,
+    stars: { dvForTwo: 0.15, dvForThree: 0.12, timeForThree: 4.8 },
+    initialPlan: launchPlan(0, 0.1),
+    solution: {
+      launchTime: 2,
+      launch: { prograde: 0.1026, radial: 0 },
+      nodes: [{ id: 'ref', dt: 4.397, prograde: 0.0829, radial: 0 }],
+    },
+    hints: [
+      'Встреча — не пролёт: в кольце цели скорость относительно Рубры должна быть меньше 1,2 км/с.',
+      'Долетите до орбиты Рубры по самой экономной дуге, а в её высшей точке добавьте ещё импульс вперёд — догоните Рубру по скорости.',
+      'Подходящее окно старта подсвечено на шкале даты старта.',
+    ],
+    hintBody: 'rubra',
+    hintWindow: [1.8, 2.2],
+    tutorial: ['add-node'],
+    camera: { x: 0.2, y: -0.3, radius: 1.85 },
+  },
 ]
 
 const BY_ID = new Map(LEVELS.map((l) => [l.id, l]))

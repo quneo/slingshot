@@ -16,11 +16,17 @@ const THREE_STAR: Record<string, Plan> = {
   L3: { launchTime: 2.9128148563599505, launch: { prograde: 0.21176207781419362, radial: 0.0026447070193079607 }, nodes: [] },
   L4: { launchTime: 0, launch: { prograde: -0.008760591369606434, radial: -0.001995678091584837 }, nodes: [] },
   L5: { launchTime: 2.0101087003628733, launch: { prograde: 0.24363213394082348, radial: 0.004865158465761792 }, nodes: [] },
+  L6: {
+    launchTime: 1.7615418266966107,
+    launch: { prograde: 0.08889389958036913, radial: -0.0059152694410368875 },
+    nodes: [{ id: 'n1', dt: 3.3251438959641924, prograde: 0.021114369024175024, radial: 0.0007888989529427613 }],
+  },
 }
 
 describe('7. every shipped level has a reproducible winning solution', () => {
-  it('ships five levels', () => {
-    expect(LEVELS.map((l) => l.id)).toEqual(['L1', 'L2', 'L3', 'L4', 'L5'])
+  it('ships five campaign levels and the rendezvous bonus', () => {
+    expect(LEVELS.map((l) => l.id)).toEqual(['L1', 'L2', 'L3', 'L4', 'L5', 'L6'])
+    expect(getLevel('L6').target.kind).toBe('rendezvous')
   })
 
   for (const level of LEVELS) {
@@ -84,6 +90,24 @@ describe('gravity assists in the design are real', () => {
     const res = run(level, level.initialPlan)
     expect(res.outcome.success).toBe(false)
     expect(res.outcome.spentDv).toBe(0)
+  })
+})
+
+describe('rendezvous goal (L6)', () => {
+  it('arriving without matching speed is not a rendezvous', () => {
+    const level = getLevel('L6')
+    const oneBurn: Plan = { ...level.solution, nodes: [] }
+    const res = run(level, oneBurn)
+    expect(res.outcome.success).toBe(false)
+    expect(res.result.fastPass).not.toBeNull()
+    expect(res.result.fastPass!.relSpeed).toBeGreaterThan(level.target.maxRelSpeed!)
+  })
+
+  it('the matching burn makes it one, with a small relative speed at arrival', () => {
+    const level = getLevel('L6')
+    const res = run(level, level.solution)
+    expect(res.outcome.success).toBe(true)
+    expect(res.result.arrival!.relSpeed).toBeLessThanOrEqual(level.target.maxRelSpeed!)
   })
 })
 

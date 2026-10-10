@@ -15,9 +15,9 @@ import { flownRef, forecastRef, ghostRef } from '../state/prediction'
 import type { PredictResponse } from '../game/worker/protocol'
 import { sceneBridge } from './sceneBridge'
 
-/** Menu backdrop: the full system, every planet. */
-const SHOWCASE = LEVELS[LEVELS.length - 1]
-const MENU_TARGETS: Record<string, MenuMarker['bodyId']> = { L1: 'rubra', L2: 'colossus', L3: 'aurum', L4: 'aqua', L5: 'viola' }
+/** Menu backdrop: the level that shows the most of the system (every planet). */
+const SHOWCASE = LEVELS.reduce((best, l) => (l.bodies.length > best.bodies.length ? l : best))
+const MENU_TARGETS: Record<string, MenuMarker['bodyId']> = { L1: 'rubra', L2: 'colossus', L3: 'aurum', L4: 'aqua', L5: 'viola', L6: 'rubra' }
 
 const missionCache = new Map<string, MissionSystem>()
 function missionOf(level: LevelDef): MissionSystem {

@@ -7,12 +7,15 @@ import { planetSpriteUrl } from '../../game/rendering/assets'
 import { useGame } from '../../state/gameStore'
 import { cn } from '@/lib/utils'
 import { Button } from '../components/button'
+import { toKms } from '../../game/physics/units'
 import { days, kms, mkm, plural } from '../format'
 import { ForecastStatus } from './ForecastStatus'
 
 export function goalText(level: LevelDef): string {
   const zone = mkm(level.target.zoneRadius)
-  return level.target.kind === 'flyby' ? `Пройти ближе ${zone} от центра планеты` : `Сблизиться на ${zone} и уравнять скорость`
+  if (level.target.kind === 'flyby') return `Пройти ближе ${zone} от центра планеты`
+  const rel = toKms(level.target.maxRelSpeed ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })
+  return `Подойти ближе ${zone} и уравнять скорость: разница не больше ${rel} км/с`
 }
 
 export function burnsText(level: LevelDef): string {

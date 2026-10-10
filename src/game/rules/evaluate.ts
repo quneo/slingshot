@@ -57,6 +57,8 @@ export interface MissionOutcome {
   unexecutedNodeIds: string[]
   /** for missed flights: what went wrong, in actionable terms */
   miss: MissReport | null
+  /** rendezvous goals: where the ship crossed the goal ring too fast, and how fast */
+  fastPass: ApproachPoint | null
 }
 
 export function evaluateMission(
@@ -85,6 +87,7 @@ export function evaluateMission(
     collisionBody: result.collision ? mission.ids[result.collision.bodyIndex] : null,
     collisionTime: result.collision?.t ?? null,
     unexecutedNodeIds,
+    fastPass: result.fastPass,
   }
 
   const violation = checkPlan(level, plan)[0]
