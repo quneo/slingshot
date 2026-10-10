@@ -1,0 +1,17 @@
+{
+  "name": "Slingshot — головоломка об орбитах",
+  "short_name": "Slingshot",
+  "description": "Мало топлива. Большие возможности. Головоломка об орбитальной механике и гравитационных манёврах.",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#080F20",
+  "theme_color": "#080F20",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

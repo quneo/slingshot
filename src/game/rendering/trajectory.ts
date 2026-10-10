@@ -1,4 +1,4 @@
-import { SAMPLE_STRIDE } from '../physics/interpolate'
+import { hermite, newSample, SAMPLE_STRIDE } from '../physics/interpolate'
 import type { PropagationResult } from '../physics/propagate'
 import type { Camera } from './camera'
 import { arrowHead, type Ctx } from './draw'
@@ -41,14 +41,39 @@ export function legStyleAt(result: PropagationResult, t: number): LegStyle {
 
 export function buildScreenPath(result: PropagationResult, camera: Camera, tMax = Infinity): ScreenPath {
   const n0 = result.sampleCount
-  const xs = new Float32Array(n0)
-  const ys = new Float32Array(n0)
-  const ts = new Float64Array(n0)
-  const styles: LegStyle[] = []
   const s = result.samples
+  let cap = n0 * 2 + 16
+  let xs = new Float32Array(cap)
+  let ys = new Float32Array(cap)
+  let ts = new Float64Array(cap)
+  const styles: LegStyle[] = []
   let n = 0
   let lx = NaN
   let ly = NaN
+  const tmp = newSample()
+
+  const push = (t: number, x: number, y: number, style: LegStyle) => {
+    if (n >= cap) {
+      cap *= 2
+      const nx = new Float32Array(cap)
+      const ny = new Float32Array(cap)
+      const nt = new Float64Array(cap)
+      nx.set(xs)
+      ny.set(ys)
+      nt.set(ts)
+      xs = nx
+      ys = ny
+      ts = nt
+    }
+    xs[n] = x
+    ys[n] = y
+    ts[n] = t
+    styles[n] = style
+    lx = x
+    ly = y
+    n++
+  }
+
   for (let i = 0; i < n0; i++) {
     const o = i * SAMPLE_STRIDE
     const t = s[o]
@@ -57,14 +82,22 @@ export function buildScreenPath(result: PropagationResult, camera: Camera, tMax 
     const y = camera.sy(s[o + 2])
     const style = legStyleAt(result, t)
     const last = i === n0 - 1
+    if (n > 0 && i > 0) {
+      // long chords on curved arcs (zoomed in): fill in with the cubic Hermite through both samples
+      const p = o - SAMPLE_STRIDE
+      const chord = Math.hypot(x - lx, y - ly)
+      if (chord > 10 && t > s[p]) {
+        const k = Math.min(24, Math.ceil(chord / 7))
+        for (let j = 1; j < k; j++) {
+          const tj = s[p] + ((t - s[p]) * j) / k
+          if (tj > tMax) break
+          hermite(s[p], s[p + 1], s[p + 2], s[p + 3], s[p + 4], t, s[o + 1], s[o + 2], s[o + 3], s[o + 4], tj, tmp)
+          push(tj, camera.sx(tmp.x), camera.sy(tmp.y), legStyleAt(result, tj))
+        }
+      }
+    }
     if (n > 0 && !last && style === styles[n - 1] && Math.abs(x - lx) + Math.abs(y - ly) < 1.5) continue
-    xs[n] = x
-    ys[n] = y
-    ts[n] = t
-    styles[n] = style
-    lx = x
-    ly = y
-    n++
+    push(t, x, y, style)
   }
   return { n, xs, ys, ts, styles }
 }
