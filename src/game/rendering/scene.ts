@@ -575,7 +575,7 @@ export class Scene {
         setFont(ctx, 11, 700)
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        haloText(ctx, String(idx), x, y - 17, COLORS.cyan)
+        haloText(ctx, String(idx + 1), x, y - 17, COLORS.cyan)
       }
       if (selected) this.drawHandle(f, nf, id, x, y)
     })
@@ -778,9 +778,9 @@ export class Scene {
 
 // ───────────────────────────────────────────── formatting helpers
 
-/** Heliocentric speed change the flyby is worth, measured at the entry distance (energy based). */
-export function gravityGain(fb: { energyIn: number; energyOut: number; speedIn: number }): number {
-  const v2 = fb.speedIn * fb.speedIn + 2 * (fb.energyOut - fb.energyIn)
+/** Heliocentric speed change the planet's gravity alone is worth, measured at the entry distance (energy based). */
+export function gravityGain(fb: { energyIn: number; energyOut: number; speedIn: number; burnEnergy: number }): number {
+  const v2 = fb.speedIn * fb.speedIn + 2 * (fb.energyOut - fb.energyIn - fb.burnEnergy)
   return toKms(Math.sqrt(Math.max(0, v2)) - fb.speedIn)
 }
 

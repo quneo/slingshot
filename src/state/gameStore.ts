@@ -22,7 +22,8 @@ import { flownRef, forecastRef, ghostRef } from './prediction'
 export type Screen = 'menu' | 'mission'
 export type Phase = 'plan' | 'flight' | 'result'
 export type Selection = { kind: 'launch' } | { kind: 'node'; id: string } | null
-export type CameraMode = 'system' | 'ship'
+/** auto: whole flight, closing in on each gravity assist; ship: follow the ship; system: fixed overview */
+export type CameraMode = 'auto' | 'ship' | 'system'
 
 export interface FlightReport {
   levelId: string
@@ -59,8 +60,10 @@ export interface GameState {
   report: FlightReport | null
   save: SaveData
   settingsOpen: boolean
-  /** set while the player drags a handle/slider: edits are not pushed to undo until the gesture ends */
+  /** set while the player drags a handle/slider: the whole drag becomes one undo step */
   gesture: boolean
+  /** increments on every launch from planning; a replay keeps it */
+  flightId: number
 
   openMenu: (levelId?: string) => void
   selectMenuLevel: (id: string) => void
@@ -80,7 +83,10 @@ export interface GameState {
   setFlightPlaying: (playing: boolean) => void
   setFlightSpeed: (speed: FlightSpeed) => void
   setCamera: (camera: CameraMode) => void
-  finishFlight: () => void
+  /** saves the attempt of the current flight (once per launch, replays are not attempts) */
+  completeFlight: () => void
+  /** switches a finished flight to the result screen */
+  showResult: () => void
   replayFlight: () => void
   backToPlanning: () => void
   showNextHint: () => void
@@ -96,6 +102,9 @@ function getClient(): TrajectoryClient {
   if (!client) {
     client = new TrajectoryClient()
     client.subscribe((res) => useGame.getState().__receiveForecast(res))
+    client.onError(() =>
+      useGame.setState((s) => ({ forecast: { ...s.forecast, pending: false }, launchQueued: false })),
+    )
   }
   return client
 }
@@ -147,6 +156,12 @@ export const useGame = create<Internal>()((set, get) => {
     set({ save })
   }
 
+  // undo bookkeeping for drags: the snapshot is pushed on the first real change only
+  let gestureSnapshot: Plan | null = null
+  let gesturePushed = false
+  // the attempt of flight N is saved once, whatever happens to the result screen afterwards
+  let recordedFlightId = -1
+
   const requestForecast = (immediate = false) => {
     const { levelId, plan } = get()
     set((s) => ({ forecast: { ...s.forecast, pending: true } }))
@@ -166,11 +181,12 @@ export const useGame = create<Internal>()((set, get) => {
     launchQueued: false,
     hintStep: 0,
     tutorialStep: 0,
-    flight: { playing: false, speed: 10, camera: 'system' },
+    flight: { playing: false, speed: 10, camera: 'auto' },
     report: null,
     save: initialSave,
     settingsOpen: false,
     gesture: false,
+    flightId: 0,
 
     __receiveForecast: (res) => {
       const s = get()
@@ -191,14 +207,21 @@ export const useGame = create<Internal>()((set, get) => {
       if (s.phase !== 'plan') return
       const before = s.plan
       const plan = fn(clonePlan(before))
-      const undoStack = s.gesture ? s.undoStack : [...s.undoStack.slice(-49), before]
-      set({ plan, undoStack })
+      if (planKey(plan) === planKey(before)) return
+      let undoStack = s.undoStack
+      if (!s.gesture) undoStack = [...undoStack.slice(-49), before]
+      else if (!gesturePushed && gestureSnapshot) {
+        undoStack = [...undoStack.slice(-49), gestureSnapshot]
+        gesturePushed = true
+      }
+      // any edit cancels a launch that was waiting for the previous forecast
+      set({ plan, undoStack, launchQueued: false })
       requestForecast()
     },
 
     openMenu: (levelId) => {
       flightClock.playing = false
-      set({ screen: 'menu', menuLevelId: levelId ?? get().levelId, settingsOpen: false })
+      set({ screen: 'menu', menuLevelId: levelId ?? get().levelId, settingsOpen: false, launchQueued: false, gesture: false })
     },
 
     selectMenuLevel: (id) => set({ menuLevelId: id }),
@@ -221,6 +244,7 @@ export const useGame = create<Internal>()((set, get) => {
         viewTime: plan.launchTime,
         forecast: { key: null, outcome: null, pending: true, version: get().forecast.version + 1 },
         launchQueued: false,
+        gesture: false,
         hintStep: 0,
         tutorialStep: save.tutorialDone.includes(id) ? Number.POSITIVE_INFINITY : 0,
         report: null,
@@ -279,9 +303,15 @@ export const useGame = create<Internal>()((set, get) => {
     beginGesture: () => {
       const s = get()
       if (s.gesture) return
-      set({ gesture: true, undoStack: [...s.undoStack.slice(-49), clonePlan(s.plan)] })
+      gestureSnapshot = clonePlan(s.plan)
+      gesturePushed = false
+      set({ gesture: true })
     },
-    endGesture: () => set({ gesture: false }),
+    endGesture: () => {
+      gestureSnapshot = null
+      gesturePushed = false
+      set({ gesture: false })
+    },
 
     undo: () => {
       const s = get()
@@ -289,7 +319,7 @@ export const useGame = create<Internal>()((set, get) => {
       const plan = s.undoStack[s.undoStack.length - 1]
       const sel = s.selection
       const selectionValid = sel?.kind !== 'node' || plan.nodes.some((n) => n.id === sel.id)
-      set({ plan, undoStack: s.undoStack.slice(0, -1), selection: selectionValid ? sel : { kind: 'launch' } })
+      set({ plan, undoStack: s.undoStack.slice(0, -1), selection: selectionValid ? sel : { kind: 'launch' }, launchQueued: false })
       requestForecast()
     },
 
@@ -310,7 +340,14 @@ export const useGame = create<Internal>()((set, get) => {
       }
       flownRef.current = fc
       flightClock.reset(fc.result.samples[0], fc.result.endTime)
-      set({ phase: 'flight', selection: null, flight: { ...s.flight, playing: true }, launchQueued: false })
+      set({
+        phase: 'flight',
+        selection: null,
+        flight: { ...s.flight, playing: true },
+        launchQueued: false,
+        flightId: s.flightId + 1,
+        gesture: false,
+      })
       // the launch itself completes the "launch" tutorial step
       const tut = getLevel(s.levelId).tutorial ?? []
       const idx = tut.indexOf('launch')
@@ -330,10 +367,11 @@ export const useGame = create<Internal>()((set, get) => {
 
     setCamera: (camera) => set((s) => ({ flight: { ...s.flight, camera } })),
 
-    finishFlight: () => {
+    completeFlight: () => {
       const s = get()
       const flown = flownRef.current
-      if (!flown || s.phase !== 'flight') return
+      if (!flown || s.phase !== 'flight' || recordedFlightId === s.flightId) return
+      recordedFlightId = s.flightId
       const outcome = flown.outcome
       const prog = levelProgress(s.save, s.levelId)
       const attempt: AttemptSummary = {
@@ -354,8 +392,6 @@ export const useGame = create<Internal>()((set, get) => {
       persist({ ...s.save, progress: { ...s.save.progress, [s.levelId]: nextProg } })
       ghostRef.current = flown
       set({
-        phase: 'result',
-        flight: { ...s.flight, playing: false },
         report: {
           levelId: s.levelId,
           outcome,
@@ -367,6 +403,13 @@ export const useGame = create<Internal>()((set, get) => {
       })
     },
 
+    showResult: () => {
+      if (get().phase !== 'flight') return
+      get().completeFlight()
+      const s = get()
+      set({ phase: 'result', flight: { ...s.flight, playing: false } })
+    },
+
     replayFlight: () => {
       const fc = flownRef.current
       if (!fc) return
@@ -375,9 +418,17 @@ export const useGame = create<Internal>()((set, get) => {
     },
 
     backToPlanning: () => {
+      // leaving a flight that already reached its end still counts as an attempt
+      if (get().phase === 'flight' && flightClock.finished) get().completeFlight()
       flightClock.playing = false
       const s = get()
-      set({ phase: 'plan', selection: { kind: 'launch' }, viewTime: s.plan.launchTime, flight: { ...s.flight, playing: false } })
+      set({
+        phase: 'plan',
+        selection: { kind: 'launch' },
+        viewTime: s.plan.launchTime,
+        flight: { ...s.flight, playing: false },
+        launchQueued: false,
+      })
     },
 
     showNextHint: () => set((s) => ({ hintStep: Math.min(3, s.hintStep + 1) })),

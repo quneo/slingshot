@@ -22,6 +22,8 @@ export class Camera {
   height = 1
   insets: Insets = { top: 0, right: 0, bottom: 0, left: 0 }
   private target: CameraView | null = null
+  /** approach speed of the current animation, 1/s */
+  private rate = 7
   /** bumps when the user moves the camera by hand (follow modes give up then) */
   manualVersion = 0
 
@@ -59,7 +61,7 @@ export class Camera {
 
   fit(cx: number, cy: number, radius: number, animate = true): void {
     const v = this.fitView(cx, cy, radius)
-    if (animate) this.target = v
+    if (animate) this.animateTo(v)
     else this.set(v)
   }
 
@@ -70,8 +72,9 @@ export class Camera {
     this.target = null
   }
 
-  animateTo(v: CameraView): void {
+  animateTo(v: CameraView, rate = 7): void {
     this.target = v
+    this.rate = rate
   }
 
   get animating(): boolean {
@@ -98,7 +101,7 @@ export class Camera {
   /** Exponential approach to the animation target; frame-rate independent. */
   update(dtSeconds: number): void {
     if (!this.target) return
-    const k = 1 - Math.exp(-dtSeconds * 7)
+    const k = 1 - Math.exp(-dtSeconds * this.rate)
     const t = this.target
     this.x += (t.x - this.x) * k
     this.y += (t.y - this.y) * k

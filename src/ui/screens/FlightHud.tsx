@@ -1,4 +1,4 @@
-import { Crosshair, Gauge, Globe2, Pause, Pencil, Play, SkipForward } from 'lucide-react'
+import { Crosshair, Gauge, Globe2, Pause, Pencil, Play, SkipForward, Video } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { CATALOG } from '../../game/levels/catalog'
 import { getLevel } from '../../game/levels/levels'
@@ -10,7 +10,7 @@ import { genitive } from '../../game/rendering/scene'
 import { impulseMagnitude } from '../../game/rules/plan'
 import type { PredictResponse } from '../../game/worker/protocol'
 import { flightClock, type FlightSpeed } from '../../state/flightClock'
-import { useGame } from '../../state/gameStore'
+import { useGame, type CameraMode } from '../../state/gameStore'
 import { flownRef } from '../../state/prediction'
 import { cn } from '@/lib/utils'
 import { Button } from '../components/button'
@@ -45,10 +45,11 @@ function stageAt(fc: PredictResponse, levelId: string, t: number): Stage {
     if (r.endReason === 'escaped') return { title: 'Корабль покинул систему', tone: 'danger' }
     return { title: 'Время вышло', tone: 'danger' }
   }
+  // the engine message wins over a flyby in progress: a burn is never "free"
+  for (const b of r.burns) if (b.applied && b.magnitude > 0 && t >= b.t && t - b.t < fromDays(10)) return { title: 'Работает двигатель', tone: 'trail' }
   for (const f of r.flybys) {
     if (t >= f.tIn && t <= f.tOut) return { title: `Гравитационный манёвр у ${genitive(CATALOG[mission.ids[f.bodyIndex]].name)}`, tone: 'assist' }
   }
-  for (const b of r.burns) if (b.applied && b.magnitude > 0 && t >= b.t && t - b.t < fromDays(10)) return { title: 'Работает двигатель', tone: 'trail' }
   if (level.start.kind === 'docked' && t - start < fromDays(12)) return { title: `Старт с ${genitive(CATALOG[level.start.bodyId].name)}`, tone: 'trail' }
   const next = r.flybys.find((f) => f.tIn > t)
   const nextId = next ? mission.ids[next.bodyIndex] : level.target.bodyId
@@ -67,6 +68,12 @@ function eventTimes(fc: PredictResponse): number[] {
 }
 
 const SPEEDS: FlightSpeed[] = [1, 10, 100]
+
+const CAMERA: Record<CameraMode, { label: string; icon: typeof Video; next: CameraMode }> = {
+  auto: { label: 'Авто-камера', icon: Video, next: 'ship' },
+  ship: { label: 'За кораблём', icon: Crosshair, next: 'system' },
+  system: { label: 'Вся система', icon: Globe2, next: 'auto' },
+}
 
 export function FlightHud() {
   const compact = useCompact()
@@ -133,15 +140,18 @@ export function FlightHud() {
       <SkipForward size={19} />
     </Button>
   )
+  const cam = CAMERA[flight.camera]
+  const CamIcon = cam.icon
   const camera = (
     <Button
       size={compact ? 'icon' : 'md'}
-      onClick={() => setCamera(flight.camera === 'ship' ? 'system' : 'ship')}
-      aria-label={flight.camera === 'ship' ? 'Показать систему' : 'Следить за кораблём'}
+      onClick={() => setCamera(cam.next)}
+      aria-label={`Камера: ${cam.label}. Переключить`}
+      title="Переключить камеру"
       className="h-11"
     >
-      {flight.camera === 'ship' ? <Globe2 size={18} /> : <Crosshair size={18} />}
-      {!compact && (flight.camera === 'ship' ? 'Система' : 'За кораблём')}
+      <CamIcon size={18} />
+      {!compact && cam.label}
     </Button>
   )
   const edit = (

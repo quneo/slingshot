@@ -4,12 +4,13 @@ import { LEVELS, getLevel } from '../game/levels/levels'
 import { buildMissionSystem, type MissionSystem } from '../game/levels/mission'
 import type { LevelDef } from '../game/levels/types'
 import { newSample, sampleTrajectory, SAMPLE_STRIDE } from '../game/physics/interpolate'
+import { bodyState } from '../game/physics/system'
 import { fromDays, toKms } from '../game/physics/units'
 import { loadAssets } from '../game/rendering/assets'
 import type { Insets } from '../game/rendering/camera'
 import { Scene, type MenuMarker, type SceneFrame } from '../game/rendering/scene'
 import { flightClock } from '../state/flightClock'
-import { availableFor, isUnlocked, levelProgress, useGame } from '../state/gameStore'
+import { availableFor, isUnlocked, levelProgress, useGame, type CameraMode } from '../state/gameStore'
 import { flownRef, forecastRef, ghostRef } from '../state/prediction'
 import type { PredictResponse } from '../game/worker/protocol'
 import { sceneBridge } from './sceneBridge'
@@ -157,6 +158,12 @@ export function GameCanvas() {
         let insetsAt = 0
         let finishTimer: ReturnType<typeof setTimeout> | null = null
         let cameraMode = ''
+        let manualSeen = 0
+
+        const overview = (fc: PredictResponse, level: LevelDef) => {
+          const b = trajectoryBounds(fc)
+          return scene.camera.fitView(b.x, b.y, Math.max(b.r, level.camera.radius * 0.6))
+        }
 
         const fitCurrent = (animate = true) => {
           const s = useGame.getState()
@@ -166,12 +173,24 @@ export function GameCanvas() {
           }
           const level = getLevel(s.levelId)
           const fc = s.phase === 'plan' ? null : flownRef.current
-          if (fc && (s.flight.camera === 'system' || s.phase === 'result')) {
-            const b = trajectoryBounds(fc)
-            scene.camera.fit(b.x, b.y, Math.max(b.r, level.camera.radius * 0.6), animate)
+          if (fc && s.phase === 'flight' && s.flight.camera === 'ship') {
+            const p = sampleTrajectory(fc.result.samples, fc.result.sampleCount, flightClock.time, tmp)
+            scene.camera.animateTo(scene.camera.fitView(p.x, p.y, 1.1))
+          } else if (fc) {
+            scene.camera.animateTo(overview(fc, level))
           } else {
             scene.camera.fit(level.camera.x, level.camera.y, level.camera.radius, animate)
           }
+        }
+
+        /** Shows the result a moment after arrival — only for the flight that arrived, if it is still on screen. */
+        const scheduleResult = (flightId: number) => {
+          if (finishTimer) clearTimeout(finishTimer)
+          finishTimer = setTimeout(() => {
+            finishTimer = null
+            const st = useGame.getState()
+            if (st.phase === 'flight' && st.flightId === flightId && flightClock.finished) st.showResult()
+          }, 1100)
         }
         sceneBridge.refit = () => fitCurrent(true)
         sceneBridge.focusShip = () => {
@@ -181,6 +200,43 @@ export function GameCanvas() {
           const t = s.phase === 'plan' ? s.viewTime : flightClock.time
           const p = sampleTrajectory(fc.result.samples, fc.result.sampleCount, t, tmp)
           scene.camera.animateTo(scene.camera.fitView(p.x, p.y, 0.8))
+        }
+
+        /** Flight camera: follow the ship, hold the overview, or (auto) close in on each gravity assist. */
+        const steerFlightCamera = (mode: CameraMode, fc: PredictResponse, level: LevelDef, time: number) => {
+          const cam = scene.camera
+          if (mode !== cameraMode) manualSeen = cam.manualVersion
+          if (mode === 'ship') {
+            const p = sampleTrajectory(fc.result.samples, fc.result.sampleCount, time, tmp)
+            if (cameraMode !== 'ship') cam.animateTo(cam.fitView(p.x, p.y, 1.1))
+            else if (!cam.animating) cam.set({ ...cam.fitView(p.x, p.y, 1), zoom: cam.zoom })
+            return
+          }
+          if (mode === 'system') {
+            if (cameraMode !== 'system' && cameraMode !== '') cam.animateTo(overview(fc, level))
+            return
+          }
+          // auto: the player grabbing the map takes over (switch to the fixed overview)
+          if (cam.manualVersion !== manualSeen) {
+            useGame.getState().setCamera('system')
+            return
+          }
+          const mission = missionOf(level)
+          const fb = fc.result.flybys.find((f) => {
+            const pad = (f.tOut - f.tIn) * 0.35
+            return time >= f.tIn - pad && time <= f.tOut + pad
+          })
+          if (fb) {
+            const p = sampleTrajectory(fc.result.samples, fc.result.sampleCount, time, tmp)
+            const pl = bodyState(mission.system, fb.bodyIndex, time)
+            const infl = mission.system.bodies[fb.bodyIndex].influenceRadius
+            const d = Math.hypot(p.x - pl.x, p.y - pl.y)
+            const radius = Math.max(infl * 1.15, d * 0.6 + infl * 0.5)
+            cam.animateTo(cam.fitView((p.x + pl.x * 2) / 3, (p.y + pl.y * 2) / 3, radius), 2.2)
+          } else {
+            cam.animateTo(overview(fc, level), 2.2)
+          }
+          manualSeen = cam.manualVersion
         }
 
         let last = performance.now()
@@ -243,24 +299,21 @@ export function GameCanvas() {
             const level = getLevel(s.levelId)
             let time = s.viewTime
             let thrust = 0
+            if (s.phase !== 'flight' && finishTimer) {
+              clearTimeout(finishTimer)
+              finishTimer = null
+            }
             if (s.phase !== 'plan') {
-              if (s.phase === 'flight' && flightClock.advance(dt) && !finishTimer) {
-                finishTimer = setTimeout(() => {
-                  finishTimer = null
-                  useGame.getState().finishFlight()
-                }, 1100)
+              if (s.phase === 'flight' && flightClock.advance(dt)) {
+                // the attempt counts the moment the ship arrives, whatever the player does next
+                s.completeFlight()
+                scheduleResult(s.flightId)
               }
               time = flightClock.time
               const fc = flownRef.current
               if (fc) {
                 thrust = thrustAt(fc, level, time)
-                if (s.phase === 'flight' && s.flight.camera === 'ship') {
-                  const p = sampleTrajectory(fc.result.samples, fc.result.sampleCount, time, tmp)
-                  if (cameraMode !== 'ship') scene.camera.animateTo(scene.camera.fitView(p.x, p.y, 1.1))
-                  else if (!scene.camera.animating) scene.camera.set({ ...scene.camera.fitView(p.x, p.y, 1), zoom: scene.camera.zoom })
-                } else if (cameraMode === 'ship') {
-                  fitCurrent(true)
-                }
+                if (s.phase === 'flight') steerFlightCamera(s.flight.camera, fc, level, time)
               }
               cameraMode = s.phase === 'flight' ? s.flight.camera : ''
             } else {

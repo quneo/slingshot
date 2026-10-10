@@ -64,10 +64,14 @@ export interface FlybyRecord extends ApproachPoint {
   /** heliocentric specific orbital energy (star only) on entering / leaving */
   energyIn: number
   energyOut: number
-  /** |v_out − v_in|: how much the planet's gravity turned/changed the heliocentric velocity, for free */
+  /** |v_out − v_in − Σ burns inside|: how much the planet's gravity alone changed the heliocentric velocity */
   deltaV: number
   vxIn: number
   vyIn: number
+  /** energy and velocity added by engine burns fired inside the sphere (excluded from the gravity figures) */
+  burnEnergy: number
+  burnDvx: number
+  burnDvy: number
   /** false when the trajectory ended inside the influence radius */
   complete: boolean
 }
@@ -193,6 +197,8 @@ export function propagate(input: PropagationInput): PropagationResult {
   let burnIdx = 0
   let steps = 0
 
+  const energyOf = (st: Float64Array) => 0.5 * (st[2] * st[2] + st[3] * st[3]) - system.centralMu / Math.hypot(st[0], st[1])
+
   const bodyAt = (i: number, tt: number): Float64Array => {
     const orbit = bodies[i].orbit
     if (orbit) keplerStateInto(orbit, system.centralMu, tt, bodyBuf, 0)
@@ -260,9 +266,10 @@ export function propagate(input: PropagationInput): PropagationResult {
       let prevT = s.ta
       let prevD = ra.d
       for (let k = 1; k <= SCAN_SUBSTEPS; k++) {
+        // an earlier event of another body only matters if this substep starts after it
+        if (best && prevT >= best.t) break
         const tt = s.ta + (h * k) / SCAN_SUBSTEPS
         const r = relAt(s, i, tt)
-        if (best && tt > best.t) break
         if (isTarget && r.d <= target.zoneRadius) {
           const slowEnough = target.maxRelSpeed === null || r.vrel <= target.maxRelSpeed
           if (slowEnough) {
@@ -286,8 +293,6 @@ export function propagate(input: PropagationInput): PropagationResult {
   }
 
   let releasedThisStep = false
-
-  const energyOf = (st: Float64Array) => 0.5 * (st[2] * st[2] + st[3] * st[3]) - system.centralMu / Math.hypot(st[0], st[1])
 
   /** Closest-approach and flyby bookkeeping over [ta, tb]. */
   const track = (s: StepEnds, speedA: number, speedB: number): void => {
@@ -314,7 +319,8 @@ export function propagate(input: PropagationInput): PropagationResult {
       if (!inside[i] && nowInside) {
         flybyOpen[i] = {
           ...ap, bodyIndex: i, tIn: s.tb, tOut: NaN, speedIn: speedA, speedOut: NaN,
-          energyIn: energyOf(s.ya), energyOut: NaN, deltaV: 0, vxIn: s.ya[2], vyIn: s.ya[3], complete: false,
+          energyIn: energyOf(s.ya), energyOut: NaN, deltaV: 0, vxIn: s.ya[2], vyIn: s.ya[3],
+          burnEnergy: 0, burnDvx: 0, burnDvy: 0, complete: false,
         }
       }
       const open = flybyOpen[i]
@@ -323,7 +329,7 @@ export function propagate(input: PropagationInput): PropagationResult {
         open.tOut = s.tb
         open.speedOut = speedB
         open.energyOut = energyOf(s.yb)
-        open.deltaV = Math.hypot(s.yb[2] - open.vxIn, s.yb[3] - open.vyIn)
+        open.deltaV = Math.hypot(s.yb[2] - open.vxIn - open.burnDvx, s.yb[3] - open.vyIn - open.burnDvy)
         open.complete = true
         flybys.push(open)
         flybyOpen[i] = null
@@ -338,8 +344,15 @@ export function propagate(input: PropagationInput): PropagationResult {
     const { dvx, dvy } = burnToInertial(y[2], y[3], b.prograde, b.radial)
     rec.vxBefore = y[2]
     rec.vyBefore = y[3]
+    const energyBefore = energyOf(y)
     y[2] += dvx
     y[3] += dvy
+    for (const open of flybyOpen) {
+      if (!open) continue
+      open.burnEnergy += energyOf(y) - energyBefore
+      open.burnDvx += dvx
+      open.burnDvy += dvy
+    }
     rec.x = y[0]
     rec.y = y[1]
     rec.dvx = dvx
@@ -452,7 +465,7 @@ export function propagate(input: PropagationInput): PropagationResult {
       open.tOut = t
       open.speedOut = Math.hypot(y[2], y[3])
       open.energyOut = energyOf(y)
-      open.deltaV = Math.hypot(y[2] - open.vxIn, y[3] - open.vyIn)
+      open.deltaV = Math.hypot(y[2] - open.vxIn - open.burnDvx, y[3] - open.vyIn - open.burnDvy)
       flybys.push(open)
     }
   }

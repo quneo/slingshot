@@ -30,7 +30,7 @@ type Drag =
   | { kind: 'none' }
   | { kind: 'pending'; id: number }
   | { kind: 'pan'; id: number }
-  | { kind: 'handle'; id: number; handleId: string }
+  | { kind: 'handle'; id: number; handleId: string; offX: number; offY: number; live: boolean }
   | { kind: 'pinch'; dist: number; mx: number; my: number }
 
 const TAP_SLOP = 7
@@ -88,7 +88,8 @@ export class Interaction {
     const hits = this.scene.hits
     const hd = hits.handle
     if (hd && this.h.canEdit() && Math.hypot(p.x - hd.tx, p.y - hd.ty) <= this.radius(e.pointerType, 16)) {
-      this.drag = { kind: 'handle', id: e.pointerId, handleId: hd.id }
+      // keep the grab point: the arrow tip moves with the finger instead of jumping under it
+      this.drag = { kind: 'handle', id: e.pointerId, handleId: hd.id, offX: hd.tx - p.x, offY: hd.ty - p.y, live: false }
       this.h.onGestureStart()
       this.canvas.style.cursor = 'grabbing'
       return
@@ -120,9 +121,14 @@ export class Interaction {
         this.drag = { kind: 'pinch', dist, mx, my }
         return
       }
-      case 'handle':
-        if (e.pointerId === this.drag.id) this.dragHandle(this.drag.handleId, p.x, p.y)
+      case 'handle': {
+        if (e.pointerId !== this.drag.id) return
+        // a tap on the handle must not nudge the impulse
+        if (!this.drag.live && Math.hypot(p.x - info.startX, p.y - info.startY) < (info.type === 'touch' ? TAP_SLOP : 3)) return
+        this.drag.live = true
+        this.dragHandle(this.drag.handleId, p.x + this.drag.offX, p.y + this.drag.offY)
         return
+      }
       case 'pending':
         if (Math.hypot(p.x - info.startX, p.y - info.startY) > TAP_SLOP) {
           this.drag = { kind: 'pan', id: e.pointerId }

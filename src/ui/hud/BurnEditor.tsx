@@ -127,6 +127,18 @@ export function BurnEditor({ compact = false }: { compact?: boolean }) {
   const endGesture = useGame((s) => s.endGesture)
   const hintStep = useGame((s) => s.hintStep)
 
+  /** one slider drag = one undo step; ends on release even if the value never changed */
+  const startSliderGesture = () => {
+    beginGesture()
+    const end = () => {
+      endGesture()
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+    }
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+  }
+
   if (!selection) return null
   const node = selection.kind === 'node' ? plan.nodes.find((n) => n.id === selection.id) : null
   if (selection.kind === 'node' && !node) return null
@@ -186,8 +198,7 @@ export function BurnEditor({ compact = false }: { compact?: boolean }) {
           step={fromDays(1)}
           value={[node.dt]}
           onValueChange={([v]) => updateNode(node.id, { dt: v })}
-          onPointerDown={beginGesture}
-          onValueCommit={endGesture}
+          onPointerDown={startSliderGesture}
           aria-label="Время импульса"
         />
         <Button variant="outline" size="iconSm" aria-label="На день позже" onClick={() => updateNode(node.id, { dt: node.dt + fromDays(1) })}>
@@ -220,8 +231,7 @@ export function BurnEditor({ compact = false }: { compact?: boolean }) {
           step={fromDays(1)}
           value={[plan.launchTime]}
           onValueChange={([v]) => setLaunchTime(v)}
-          onPointerDown={beginGesture}
-          onValueCommit={endGesture}
+          onPointerDown={startSliderGesture}
           aria-label="Дата старта"
           trackOverlay={
             hintStep >= 3 && level.hintWindow ? (
