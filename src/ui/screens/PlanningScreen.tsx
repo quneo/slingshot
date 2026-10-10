@@ -13,7 +13,7 @@ import { Timeline } from '../hud/Timeline'
 import { TutorialCoach } from '../hud/TutorialCoach'
 import { Wordmark } from '../hud/Wordmark'
 import { sceneBridge } from '../sceneBridge'
-import { useCompact, useShortLandscape } from '../useMedia'
+import { useCompact, useShortDesktop, useShortLandscape } from '../useMedia'
 
 function MapTools({ vertical = false }: { vertical?: boolean }) {
   const undo = useGame((s) => s.undo)
@@ -58,6 +58,8 @@ export function PlanningScreen() {
 }
 
 function WidePlanning({ onBack }: { onBack: () => void }) {
+  // laptops with ~768px of height: slimmer chrome so the map keeps its room
+  const short = useShortDesktop()
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col gap-3 p-4">
       <header className="flex items-start justify-between gap-4">
@@ -78,7 +80,7 @@ function WidePlanning({ onBack }: { onBack: () => void }) {
         <ScaleNote className="absolute bottom-0 right-0" />
       </div>
       <div className="pointer-events-auto">
-        <Timeline className="mb-2" />
+        <Timeline className="mb-2" compact={short} />
         <RouteDock />
       </div>
     </div>

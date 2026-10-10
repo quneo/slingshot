@@ -106,7 +106,7 @@ export function RouteDock({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <section className={cn('panel', compact ? 'p-3' : 'px-5 py-4')} data-inset="bottom" aria-label="Маршрут">
+    <section className={cn('panel', compact ? 'p-3' : 'px-5 py-4 [@media(max-height:860px)]:py-3')} data-inset="bottom" aria-label="Маршрут">
       <div className="flex items-center gap-4">
         {!compact && (
           <div className="w-[104px] shrink-0">

@@ -25,3 +25,16 @@ function subscribeShort(cb: () => void) {
 export function useShortLandscape(): boolean {
   return useSyncExternalStore(subscribeShort, () => window.matchMedia(SHORT).matches, () => false)
 }
+
+const SHORT_DESKTOP = '(max-height: 860px)'
+
+function subscribeShortDesktop(cb: () => void) {
+  const mq = window.matchMedia(SHORT_DESKTOP)
+  mq.addEventListener('change', cb)
+  return () => mq.removeEventListener('change', cb)
+}
+
+/** Wide but not tall (typical laptop): trim vertical chrome. */
+export function useShortDesktop(): boolean {
+  return useSyncExternalStore(subscribeShortDesktop, () => window.matchMedia(SHORT_DESKTOP).matches, () => false)
+}

@@ -105,6 +105,7 @@ export function MissionCard({ className }: { className?: string }) {
       </button>
       {open && (
         <div className="space-y-3 px-5 pb-4">
+          <ForecastStatus />
           <p className="text-[13.5px] leading-snug text-ink-2">{level.briefing}</p>
           <div className="hairline flex items-center gap-3 border-t pt-3">
             <PlanetThumb id={target.id} size={44} />
@@ -117,7 +118,6 @@ export function MissionCard({ className }: { className?: string }) {
           <div className="hairline border-t pt-3">
             <Constraints level={level} />
           </div>
-          <ForecastStatus />
           <Hints level={level} />
         </div>
       )}

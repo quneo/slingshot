@@ -36,12 +36,14 @@ function useKeyboard() {
 export function App() {
   const screen = useGame((s) => s.screen)
   const phase = useGame((s) => s.phase)
+  const levelId = useGame((s) => s.levelId)
   useKeyboard()
   return (
     <main className="relative h-full w-full overflow-hidden">
       <GameCanvas />
       {screen === 'menu' && <MissionSelect />}
-      {screen === 'mission' && phase === 'plan' && <PlanningScreen />}
+      {/* keyed by mission: local UI state (open editor, expanded card) starts fresh in every mission */}
+      {screen === 'mission' && phase === 'plan' && <PlanningScreen key={levelId} />}
       {screen === 'mission' && phase === 'flight' && <FlightHud />}
       {screen === 'mission' && phase === 'result' && <ResultPanel />}
       <SettingsDialog />
