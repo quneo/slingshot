@@ -34,7 +34,7 @@ test('the whole campaign can be won through the interface', async ({ page }, inf
     if (!sessionStorage.getItem('seeded')) {
       localStorage.setItem(
         'slingshot:save',
-        JSON.stringify({ version: 1, settings: {}, progress: {}, tutorialDone: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6'] }),
+        JSON.stringify({ version: 1, settings: {}, progress: {}, tutorialDone: ['L1:plan', 'L1:flight', 'L2:plan', 'L3:plan', 'L4:plan', 'L5:plan', 'L6:plan'] }),
       )
       sessionStorage.setItem('seeded', '1')
     }

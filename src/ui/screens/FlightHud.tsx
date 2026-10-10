@@ -17,6 +17,7 @@ import { Button } from '../components/button'
 import { days, kmsNumber, mkm } from '../format'
 import { PlanetThumb } from '../hud/MissionCard'
 import { Wordmark } from '../hud/Wordmark'
+import { HelpButton } from '../tour/HelpButton'
 import { useCompact } from '../useMedia'
 
 /** Re-renders the HUD ~12 times a second from the mutable flight clock. */
@@ -118,7 +119,7 @@ export function FlightHud() {
     </Button>
   )
   const speeds = (
-    <div className="panel-quiet flex h-11 items-center p-1" role="radiogroup" aria-label="Скорость времени">
+    <div className="panel-quiet flex h-11 items-center p-1" role="radiogroup" aria-label="Скорость времени" data-tour="speed">
       {SPEEDS.map((sp) => (
         <button
           key={sp}
@@ -155,6 +156,7 @@ export function FlightHud() {
       aria-label={`Камера: ${cam.label}. Переключить`}
       title="Переключить камеру"
       className="h-11"
+      data-tour="camera"
     >
       <CamIcon size={18} />
       {!compact && cam.label}
@@ -251,6 +253,7 @@ export function FlightHud() {
           <div className="flex gap-2">
             {camera}
             {edit}
+            <HelpButton />
           </div>
         </div>
       </header>

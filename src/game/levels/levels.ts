@@ -44,7 +44,6 @@ export const LEVELS: LevelDef[] = [
       'Около 3,5 км/с почти точно вперёд хватит с запасом.',
     ],
     hintBody: 'rubra',
-    tutorial: ['drag-impulse', 'read-forecast', 'launch'],
     camera: { x: 0.1, y: -0.4, radius: 1.75 },
   },
   {
@@ -78,7 +77,6 @@ export const LEVELS: LevelDef[] = [
     ],
     hintBody: 'colossus',
     hintWindow: [5.3, 6.8],
-    tutorial: ['launch-window'],
     camera: { x: -0.3, y: -0.4, radius: 2.9 },
   },
   {
@@ -113,7 +111,6 @@ export const LEVELS: LevelDef[] = [
     ],
     hintBody: 'colossus',
     hintWindow: [2.4, 3.2],
-    tutorial: ['flyby', 'add-node'],
     camera: { x: -0.8, y: 1.0, radius: 3.6 },
   },
   {
@@ -219,7 +216,6 @@ export const LEVELS: LevelDef[] = [
     ],
     hintBody: 'rubra',
     hintWindow: [1.8, 2.2],
-    tutorial: ['add-node'],
     camera: { x: 0.2, y: -0.3, radius: 1.85 },
   },
 ]

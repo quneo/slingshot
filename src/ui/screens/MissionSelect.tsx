@@ -9,6 +9,7 @@ import { daysLabel, kmsNumber } from '../format'
 import { Constraints, PlanetThumb } from '../hud/MissionCard'
 import { Stars } from '../hud/Stars'
 import { Wordmark } from '../hud/Wordmark'
+import { HelpButton } from '../tour/HelpButton'
 import { useCompact } from '../useMedia'
 
 const START_BODY = (l: LevelDef) => (l.start.kind === 'docked' ? l.start.bodyId : null)
@@ -152,6 +153,7 @@ export function MissionSelect() {
               {total} из {LEVELS.length * 3}
             </span>
           </div>
+          <HelpButton />
           <Button size="icon" onClick={() => openSettings(true)} aria-label="Настройки">
             <Settings size={19} />
           </Button>

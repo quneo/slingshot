@@ -59,6 +59,12 @@ export function SettingsDialog() {
             onChange={(v) => set({ showGhost: v })}
           />
           <Toggle
+            label="Путь без пращи"
+            hint="Бледная линия: куда полетел бы корабль без притяжения планеты-пращи."
+            checked={settings.showNoAssist}
+            onChange={(v) => set({ showNoAssist: v })}
+          />
+          <Toggle
             label="Меньше анимации"
             hint="Без бегущего пунктира, мерцания звёзд и вращения планет в меню."
             checked={settings.reducedMotion}

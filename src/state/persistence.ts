@@ -8,6 +8,8 @@ export interface Settings {
   /** draw planets larger than their physical size (collisions still use physical radii) */
   enlargePlanets: boolean
   showGhost: boolean
+  /** compare the forecast with the same flight without the slingshot planet */
+  showNoAssist: boolean
   reducedMotion: boolean
   unlockAll: boolean
 }
@@ -39,6 +41,7 @@ export interface SaveData {
 export const DEFAULT_SETTINGS: Settings = {
   enlargePlanets: true,
   showGhost: true,
+  showNoAssist: true,
   reducedMotion: false,
   unlockAll: false,
 }

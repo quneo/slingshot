@@ -6,6 +6,7 @@ import { clonePlan, impulseMagnitude, newNodeId, planKey, type BurnNode, type Im
 import { TrajectoryClient } from '../game/worker/client'
 import { predict } from '../game/worker/predict'
 import type { PredictResponse } from '../game/worker/protocol'
+import { TOURS, tourKey } from '../game/levels/tours'
 import { flightClock, type FlightSpeed } from './flightClock'
 import {
   emptyProgress,
@@ -55,7 +56,8 @@ export interface GameState {
   forecast: Forecast
   launchQueued: boolean
   hintStep: number
-  tutorialStep: number
+  /** the guided tour on screen, if any */
+  tour: { key: string; step: number } | null
   flight: { playing: boolean; speed: FlightSpeed; camera: CameraMode }
   report: FlightReport | null
   save: SaveData
@@ -90,8 +92,12 @@ export interface GameState {
   replayFlight: () => void
   backToPlanning: () => void
   showNextHint: () => void
-  advanceTutorial: (step: number) => void
-  finishTutorial: () => void
+  /** next step of the current tour (finishes it after the last one) */
+  advanceTour: () => void
+  /** closes the current tour and remembers it was seen */
+  finishTour: () => void
+  /** starts a tour again on demand (help dialog) */
+  startTour: (key: string) => void
   updateSettings: (patch: Partial<Settings>) => void
   setSettingsOpen: (open: boolean) => void
   resetProgress: () => void
@@ -162,10 +168,11 @@ export const useGame = create<Internal>()((set, get) => {
   // the attempt of flight N is saved once, whatever happens to the result screen afterwards
   let recordedFlightId = -1
 
-  const requestForecast = (immediate = false) => {
+  const requestForecast = () => {
     const { levelId, plan } = get()
-    set((s) => ({ forecast: { ...s.forecast, pending: true } }))
-    getClient().request(levelId, plan, immediate)
+    // only notify React when the flag actually flips (a drag sends one request per pointer move)
+    if (!get().forecast.pending) set((s) => ({ forecast: { ...s.forecast, pending: true } }))
+    getClient().request(levelId, plan)
   }
 
   return {
@@ -180,7 +187,7 @@ export const useGame = create<Internal>()((set, get) => {
     forecast: { key: null, outcome: null, pending: false, version: 0 },
     launchQueued: false,
     hintStep: 0,
-    tutorialStep: 0,
+    tour: null,
     flight: { playing: false, speed: 10, camera: 'auto' },
     report: null,
     save: initialSave,
@@ -221,7 +228,7 @@ export const useGame = create<Internal>()((set, get) => {
 
     openMenu: (levelId) => {
       flightClock.playing = false
-      set({ screen: 'menu', menuLevelId: levelId ?? get().levelId, settingsOpen: false, launchQueued: false, gesture: false })
+      set({ screen: 'menu', menuLevelId: levelId ?? get().levelId, settingsOpen: false, launchQueued: false, gesture: false, tour: null })
     },
 
     selectMenuLevel: (id) => set({ menuLevelId: id }),
@@ -246,11 +253,15 @@ export const useGame = create<Internal>()((set, get) => {
         launchQueued: false,
         gesture: false,
         hintStep: 0,
-        tutorialStep: save.tutorialDone.includes(id) ? Number.POSITIVE_INFINITY : 0,
+        tour: TOURS[tourKey(id, 'plan')] && !save.tutorialDone.includes(tourKey(id, 'plan')) ? { key: tourKey(id, 'plan'), step: 0 } : null,
         report: null,
       })
       computeGhost(id, levelProgress(save, id).lastPlan)
-      requestForecast(true)
+      // the first forecast is computed right here (a few ms, once) so the path is on screen with the level;
+      // every edit after that goes through the worker
+      get().__receiveForecast(predict(0, id, plan))
+      // start (and warm up) the worker now, so the first drag does not wait for it to load
+      getClient().request(id, plan)
     },
 
     setLaunchTime: (t) => {
@@ -335,7 +346,7 @@ export const useGame = create<Internal>()((set, get) => {
       const fc = forecastRef.current
       if (!fc || fc.planKey !== planKey(s.plan) || fc.levelId !== s.levelId) {
         set({ launchQueued: true })
-        requestForecast(true)
+        requestForecast()
         return
       }
       flownRef.current = fc
@@ -348,10 +359,10 @@ export const useGame = create<Internal>()((set, get) => {
         flightId: s.flightId + 1,
         gesture: false,
       })
-      // the launch itself completes the "launch" tutorial step
-      const tut = getLevel(s.levelId).tutorial ?? []
-      const idx = tut.indexOf('launch')
-      if (idx >= 0 && s.tutorialStep <= idx) get().finishTutorial()
+      // launching ends the planning tour; the first flight of a level may have its own short tour
+      if (s.tour?.key === tourKey(s.levelId, 'plan')) get().finishTour()
+      const flightKey = tourKey(s.levelId, 'flight')
+      if (TOURS[flightKey] && !get().save.tutorialDone.includes(flightKey)) set({ tour: { key: flightKey, step: 0 } })
     },
 
     setFlightPlaying: (playing) => {
@@ -428,18 +439,28 @@ export const useGame = create<Internal>()((set, get) => {
         viewTime: s.plan.launchTime,
         flight: { ...s.flight, playing: false },
         launchQueued: false,
+        tour: s.tour?.key.endsWith(':flight') ? null : s.tour,
       })
     },
 
     showNextHint: () => set((s) => ({ hintStep: Math.min(3, s.hintStep + 1) })),
 
-    advanceTutorial: (step) => set((s) => ({ tutorialStep: Math.max(s.tutorialStep, step) })),
+    advanceTour: () => {
+      const tour = get().tour
+      if (!tour) return
+      if (tour.step + 1 >= (TOURS[tour.key]?.length ?? 0)) get().finishTour()
+      else set({ tour: { key: tour.key, step: tour.step + 1 } })
+    },
 
-    finishTutorial: () => {
+    finishTour: () => {
       const s = get()
-      set({ tutorialStep: Number.POSITIVE_INFINITY })
-      if (!s.save.tutorialDone.includes(s.levelId))
-        persist({ ...s.save, tutorialDone: [...s.save.tutorialDone, s.levelId] })
+      const key = s.tour?.key
+      set({ tour: null })
+      if (key && !s.save.tutorialDone.includes(key)) persist({ ...s.save, tutorialDone: [...s.save.tutorialDone, key] })
+    },
+
+    startTour: (key) => {
+      if (TOURS[key]) set({ tour: { key, step: 0 }, settingsOpen: false })
     },
 
     updateSettings: (patch) => {

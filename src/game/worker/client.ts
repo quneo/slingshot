@@ -6,8 +6,10 @@ type Listener = (res: PredictResponse) => void
 type ErrorListener = (message: string) => void
 
 /**
- * Debounced, latest-wins access to the trajectory worker.
- * At most one request is in flight; while it runs only the newest plan is queued.
+ * Latest-wins access to the trajectory worker, paced by the worker itself.
+ * A request goes out at once if the worker is idle; while one is in flight only the newest plan waits, and it is
+ * sent the moment the answer comes back. A drag therefore updates the forecast as fast as it can be computed
+ * (every frame for these levels) — no debounce that would starve while the pointer keeps moving.
  * Responses older than the newest request are dropped, so a stale forecast never overwrites a fresh one.
  */
 export class TrajectoryClient {
@@ -16,13 +18,12 @@ export class TrajectoryClient {
   private latestId = 0
   private inFlight: number | null = null
   private queued: PredictRequest | null = null
-  private timer: ReturnType<typeof setTimeout> | null = null
   private readonly listeners = new Set<Listener>()
   private readonly errorListeners = new Set<ErrorListener>()
   /** the request being computed, kept to recompute it on the main thread if the worker dies */
   private current: PredictRequest | null = null
 
-  constructor(private readonly debounceMs = 24) {
+  constructor() {
     try {
       this.worker = new Worker(new URL('./trajectory.worker.ts', import.meta.url), { type: 'module' })
       this.worker.onmessage = (e: MessageEvent<WorkerResponse>) => this.handle(e.data)
@@ -50,14 +51,12 @@ export class TrajectoryClient {
     return () => this.errorListeners.delete(listener)
   }
 
-  /** Schedules a prediction; returns its request id. `immediate` skips the debounce (e.g. on level load). */
-  request(levelId: string, plan: Plan, immediate = false): number {
+  /** Schedules a prediction (replacing any not-yet-sent one); returns its request id. */
+  request(levelId: string, plan: Plan): number {
     const req: PredictRequest = { type: 'predict', requestId: this.nextId++, levelId, plan: clonePlan(plan) }
     this.latestId = req.requestId
     this.queued = req
-    if (this.timer) clearTimeout(this.timer)
-    if (immediate) this.flush()
-    else this.timer = setTimeout(() => this.flush(), this.debounceMs)
+    this.flush()
     return req.requestId
   }
 
@@ -66,7 +65,6 @@ export class TrajectoryClient {
   }
 
   dispose(): void {
-    if (this.timer) clearTimeout(this.timer)
     this.worker?.terminate()
     this.worker = null
     this.listeners.clear()
@@ -74,7 +72,6 @@ export class TrajectoryClient {
   }
 
   private flush(): void {
-    this.timer = null
     if (this.inFlight !== null || !this.queued) return
     const req = this.queued
     this.queued = null

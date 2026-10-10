@@ -83,7 +83,7 @@ export function Timeline({ className, compact = false }: { className?: string; c
 
   const endT = result?.endTime ?? t0 + span
   return (
-    <div className={cn('panel-quiet', compact ? 'px-3 pb-1 pt-1.5' : 'px-4 pb-2 pt-2.5', className)} data-inset="bottom">
+    <div className={cn('panel-quiet', compact ? 'px-3 pb-1 pt-1.5' : 'px-4 pb-2 pt-2.5', className)} data-inset="bottom" data-tour="timeline">
       <div className="mb-1 flex items-baseline justify-between text-[12px]">
         <span className="font-semibold text-ink-2">Время полёта</span>
         <span className="num font-bold">

@@ -40,8 +40,18 @@ export function legStyleAt(result: PropagationResult, t: number): LegStyle {
 }
 
 export function buildScreenPath(result: PropagationResult, camera: Camera, tMax = Infinity): ScreenPath {
-  const n0 = result.sampleCount
-  const s = result.samples
+  return buildScreenPathFrom(result.samples, result.sampleCount, camera, (t) => legStyleAt(result, t), -Infinity, tMax)
+}
+
+/** Screen polyline of any sampled path; `styleAt` colours it, [tMin, tMax] crops it. */
+export function buildScreenPathFrom(
+  s: Float64Array,
+  n0: number,
+  camera: Camera,
+  styleAt: (t: number) => LegStyle,
+  tMin = -Infinity,
+  tMax = Infinity,
+): ScreenPath {
   let cap = n0 * 2 + 16
   let xs = new Float32Array(cap)
   let ys = new Float32Array(cap)
@@ -78,9 +88,10 @@ export function buildScreenPath(result: PropagationResult, camera: Camera, tMax 
     const o = i * SAMPLE_STRIDE
     const t = s[o]
     if (t > tMax) break
+    if (t < tMin) continue
     const x = camera.sx(s[o + 1])
     const y = camera.sy(s[o + 2])
-    const style = legStyleAt(result, t)
+    const style = styleAt(t)
     const last = i === n0 - 1
     if (n > 0 && i > 0) {
       // long chords on curved arcs (zoomed in): fill in with the cubic Hermite through both samples
@@ -92,7 +103,7 @@ export function buildScreenPath(result: PropagationResult, camera: Camera, tMax 
           const tj = s[p] + ((t - s[p]) * j) / k
           if (tj > tMax) break
           hermite(s[p], s[p + 1], s[p + 2], s[p + 3], s[p + 4], t, s[o + 1], s[o + 2], s[o + 3], s[o + 4], tj, tmp)
-          push(tj, camera.sx(tmp.x), camera.sy(tmp.y), legStyleAt(result, tj))
+          push(tj, camera.sx(tmp.x), camera.sy(tmp.y), styleAt(tj))
         }
       }
     }

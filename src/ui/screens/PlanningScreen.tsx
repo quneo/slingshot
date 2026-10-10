@@ -10,8 +10,8 @@ import { ForecastStatus, useForecastView } from '../hud/ForecastStatus'
 import { Constraints, goalText, Hints, MissionCard, PlanetThumb } from '../hud/MissionCard'
 import { RouteDock } from '../hud/RouteDock'
 import { Timeline } from '../hud/Timeline'
-import { TutorialCoach } from '../hud/TutorialCoach'
 import { Wordmark } from '../hud/Wordmark'
+import { HelpButton } from '../tour/HelpButton'
 import { sceneBridge } from '../sceneBridge'
 import { useCompact, useShortDesktop, useShortLandscape } from '../useMedia'
 
@@ -34,6 +34,7 @@ function MapTools({ vertical = false }: { vertical?: boolean }) {
       <Button size="icon" onClick={() => sceneBridge.focusShip()} aria-label="К кораблю" title="К кораблю">
         <Crosshair size={19} />
       </Button>
+      <HelpButton />
       <Button size="icon" onClick={() => openSettings(true)} aria-label="Настройки" title="Настройки">
         <Settings size={19} />
       </Button>
@@ -76,7 +77,6 @@ function WidePlanning({ onBack }: { onBack: () => void }) {
       </header>
       <div className="relative flex min-h-0 flex-1 items-start justify-between">
         <MissionCard className="pointer-events-auto max-h-full overflow-y-auto" />
-        <TutorialCoach className="absolute right-0 top-0 w-[380px]" />
         <ScaleNote className="absolute bottom-0 right-0" />
       </div>
       <div className="pointer-events-auto">
@@ -99,6 +99,7 @@ function CompactPlanning({ onBack }: { onBack: () => void }) {
       className={cn('panel pointer-events-auto flex min-w-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left', short ? 'h-11 flex-1 py-1' : 'w-full')}
       onClick={() => setMissionOpen((o) => !o)}
       aria-expanded={missionOpen}
+      data-tour="forecast"
     >
       <PlanetThumb id={target.id} size={short ? 24 : 30} />
       <div className="min-w-0 flex-1">
@@ -140,7 +141,6 @@ function CompactPlanning({ onBack }: { onBack: () => void }) {
         </div>
       )}
       <div className="relative min-h-0 flex-1">
-        {!missionOpen && <TutorialCoach compact className={cn('absolute top-0', short ? 'right-0 w-[360px]' : 'inset-x-0')} />}
         <ScaleNote className="absolute bottom-0 right-0 text-[11px]" />
       </div>
       <div className="pointer-events-auto space-y-2">
@@ -154,7 +154,7 @@ function CompactPlanning({ onBack }: { onBack: () => void }) {
 function MapToolsCompact() {
   const undo = useGame((s) => s.undo)
   const canUndo = useGame((s) => s.undoStack.length > 0)
-  const openSettings = useGame((s) => s.setSettingsOpen)
+  // phones: settings live in the help dialog to keep the bar to four buttons
   return (
     <div className="flex gap-1.5">
       <Button size="icon" onClick={undo} disabled={!canUndo} aria-label="Отменить">
@@ -163,9 +163,7 @@ function MapToolsCompact() {
       <Button size="icon" onClick={() => sceneBridge.refit()} aria-label="Показать всю миссию">
         <Maximize2 size={18} />
       </Button>
-      <Button size="icon" onClick={() => openSettings(true)} aria-label="Настройки">
-        <Settings size={19} />
-      </Button>
+      <HelpButton />
     </div>
   )
 }

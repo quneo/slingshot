@@ -200,6 +200,40 @@ export function GameCanvas() {
           }, 1100)
         }
         sceneBridge.refit = () => fitCurrent(true)
+        sceneBridge.anchor = (key) => {
+          const s = useGame.getState()
+          if (s.screen !== 'mission') return null
+          const level = getLevel(s.levelId)
+          const hits = scene.hits
+          const planet = (id: string | undefined) => {
+            const p = id ? hits.planets.find((pl) => pl.id === id) : undefined
+            return p ? { x: p.x, y: p.y, r: p.r } : null
+          }
+          switch (key) {
+            case 'home':
+              return level.start.kind === 'docked' ? planet(level.start.bodyId) : hits.ship
+            case 'target':
+              return planet(level.target.bodyId)
+            case 'helper':
+              return planet(level.hintBody && level.hintBody !== level.target.bodyId ? level.hintBody : level.target.bodyId)
+            case 'ship':
+              return hits.ship
+            case 'handle': {
+              const h = hits.handle
+              if (!h) return null
+              const len = Math.hypot(h.tx - h.ox, h.ty - h.oy)
+              // with no impulse yet, show pulling forward along the motion
+              const dir = len > 4 ? { x: (h.tx - h.ox) / len, y: (h.ty - h.oy) / len } : { x: h.px, y: -h.py }
+              return { x: h.tx, y: h.ty, r: 14, dir }
+            }
+            case 'path': {
+              const p = hits.path
+              if (!p || p.n < 4) return null
+              const i = Math.floor(p.n * 0.22)
+              return { x: p.xs[i], y: p.ys[i], r: 12 }
+            }
+          }
+        }
         sceneBridge.focusShip = () => {
           const s = useGame.getState()
           const fc = s.phase === 'plan' ? forecastRef.current : flownRef.current
@@ -292,6 +326,7 @@ export function GameCanvas() {
               flown: null,
               ghost: null,
               showGhost: false,
+              showNoAssist: false,
               selection: null,
               enlarge: true,
               calm,
@@ -338,6 +373,7 @@ export function GameCanvas() {
               flown: flownRef.current,
               ghost: ghostRef.current?.levelId === level.id ? ghostRef.current : null,
               showGhost: s.save.settings.showGhost,
+              showNoAssist: s.save.settings.showNoAssist,
               selection: s.selection,
               enlarge: s.save.settings.enlargePlanets,
               calm,

@@ -17,7 +17,7 @@ export function DvMeter({ compact = false }: { compact?: boolean }) {
   const low = left / level.budget < 0.08
 
   return (
-    <div className={cn('panel flex items-center', compact ? 'h-11 gap-2 rounded-xl px-2.5' : 'h-[60px] gap-3 px-4')}>
+    <div className={cn('panel flex items-center', compact ? 'h-11 gap-2 rounded-xl px-2.5' : 'h-[60px] gap-3 px-4')} data-tour="dv-meter">
       <Fuel className={cn('shrink-0', low ? 'text-danger' : 'text-go')} size={compact ? 18 : 24} aria-hidden />
       <div className={cn('flex min-w-0 flex-col', compact ? 'flex-1' : 'w-[220px]')}>
         <div className="flex items-baseline justify-between gap-2 whitespace-nowrap">

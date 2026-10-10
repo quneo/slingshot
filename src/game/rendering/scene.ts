@@ -23,7 +23,7 @@ import {
   type Ctx,
 } from './draw'
 import { COLORS, withAlpha } from './palette'
-import { buildScreenPath, drawPath, pathIndexAt, type ScreenPath } from './trajectory'
+import { buildScreenPath, buildScreenPathFrom, drawPath, pathIndexAt, type ScreenPath } from './trajectory'
 
 export type SceneMode = 'menu' | 'plan' | 'flight' | 'result'
 export type SelectionRef = { kind: 'launch' } | { kind: 'node'; id: string } | null
@@ -56,6 +56,8 @@ export interface SceneFrame {
   flown: PredictResponse | null
   ghost: PredictResponse | null
   showGhost: boolean
+  /** draw the same flight without the gravity-assist planet, for comparison */
+  showNoAssist: boolean
   selection: SelectionRef
   enlarge: boolean
   calm: boolean
@@ -187,7 +189,9 @@ export class Scene {
     }
 
     this.drawEncounterGhosts(f, active, bodies)
+    if (active && f.mode === 'plan') this.drawInfluenceZones(f, active, bodies)
     this.drawStarAndPlanets(f, bodies, nowSec)
+    if (active && f.mode === 'plan' && f.showNoAssist) this.drawNoAssist(active, bodies)
 
     if (active) {
       const result = active.result
@@ -373,6 +377,7 @@ export class Scene {
         else drawPlanetDisc(ctx, img, gx, gy, b.r, null, b.c.visual.color, 0.5)
         this.board.reserve({ x: gx - b.r - 4, y: gy - b.r - 4, w: b.r * 2 + 8, h: b.r * 2 + 8 })
         ring(ctx, gx, gy, b.r + 2, withAlpha(e.color, 0.5), 1)
+        if (e.color === COLORS.amber) this.influenceRing(gx, gy, e.index, f, 0.55)
         setFont(ctx, 11.5, 650)
         ctx.textAlign = 'center'
         ctx.textBaseline = 'bottom'
@@ -392,6 +397,74 @@ export class Scene {
         ctx.arc(gx, gy, Math.max(zr, b.r + 4), 0, Math.PI * 2)
         ctx.stroke()
         ctx.restore()
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────── gravity made visible
+
+  /** Planets whose pull matters for this flight: the level's slingshot helper and every planet flown by. */
+  private assistBodies(f: SceneFrame, active: PredictResponse): number[] {
+    const ti = f.mission.indexOf(f.level.target.bodyId)
+    const set = new Set<number>()
+    if (f.level.hintBody && f.level.hintBody !== f.level.target.bodyId) set.add(f.mission.indexOf(f.level.hintBody))
+    for (const fb of active.result.flybys) if (fb.bodyIndex !== ti) set.add(fb.bodyIndex)
+    return [...set]
+  }
+
+  /** Dotted ring: inside it the planet pulls hard enough to bend the path (its sphere of influence). */
+  private influenceRing(x: number, y: number, bodyIndex: number, f: SceneFrame, alpha: number): void {
+    const r = f.mission.system.bodies[bodyIndex].influenceRadius * this.camera.zoom
+    if (r < 8) return
+    const ctx = this.ctx
+    ctx.save()
+    ctx.setLineDash([2, 6])
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = withAlpha(COLORS.amber, alpha)
+    ctx.lineWidth = 1.6
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  private drawInfluenceZones(f: SceneFrame, active: PredictResponse, bodies: ReturnType<Scene['bodyScreens']>): void {
+    for (const i of this.assistBodies(f, active)) {
+      const b = bodies[i]
+      this.influenceRing(b.x, b.y, i, f, 0.35)
+    }
+  }
+
+  /** The same flight without the slingshot planet's gravity: the gap to the real path is the planet's work. */
+  private drawNoAssist(active: PredictResponse, bodies: ReturnType<Scene['bodyScreens']>): void {
+    const na = active.noAssist
+    if (!na || na.sampleCount < 2) return
+    const ctx = this.ctx
+    const cam = this.camera
+    const path = buildScreenPathFrom(na.samples, na.sampleCount, cam, () => 'inbound', na.tFrom)
+    if (path.n < 2) return
+    drawPath(ctx, path, { dashed: true, alpha: 0.55, width: 1.6, arrows: false, dashOffset: 0, glow: false, mono: COLORS.text2 })
+    const k = path.n - 1
+    arrowHead(ctx, path.xs[k], path.ys[k], Math.atan2(path.ys[k] - path.ys[k - 1], path.xs[k] - path.xs[k - 1]), 9, withAlpha(COLORS.text2, 0.7))
+    // label where the two paths have clearly parted
+    const real = active.result
+    for (let i = 0; i < path.n; i++) {
+      const s = sampleTrajectory(real.samples, real.sampleCount, Math.min(path.ts[i], real.endTime), this.tmp)
+      if (Math.hypot(cam.sx(s.x) - path.xs[i], cam.sy(s.y) - path.ys[i]) > 44) {
+        setFont(ctx, 11.5, 650)
+        const text = `так было бы без ${genitive(bodies[na.bodyIndex].c.name)}`
+        const w = ctx.measureText(text).width + 8
+        const rect = { x: path.xs[i] + 10, y: path.ys[i] - 8, w, h: 16 }
+        if (!this.board.fits(rect)) {
+          rect.x = path.xs[i] - 10 - w
+        }
+        if (this.board.fits(rect)) {
+          ctx.textAlign = 'left'
+          ctx.textBaseline = 'middle'
+          haloText(ctx, text, rect.x + 4, path.ys[i], COLORS.text2, 0.95)
+          this.board.reserve(rect)
+        }
+        break
       }
     }
   }
@@ -519,9 +592,21 @@ export class Scene {
     else if (m.kind === 'long') lines = [`Не опускаетесь до орбиты`, `не хватает ${fmtMkm(m.gap)}`]
     else if (m.kind === 'timing') {
       const d = Math.max(1, DAY(Math.abs(m.lag)))
-      const head = helperTiming ? `Здесь нужна праща у ${genitive(name)}` : 'Здесь встреча не выйдет'
       const passed = name.endsWith('а') ? 'прошла' : 'прошёл'
-      lines = m.lag > 0 ? [head, `${name} будет рядом через ${d} дн.`] : [head, `${name} ${passed} здесь ${d} дн. назад`]
+      const head = helperTiming
+        ? `Здесь нужна праща у ${genitive(name)}`
+        : m.lag > 0
+          ? `${name} не успевает сюда на ${d} дн.`
+          : `${name} ${passed} здесь ${d} дн. назад`
+      // say what to do, not only what went wrong: the launch-date change that fixes the timing
+      const shift = m.launchShift !== null ? DAY(m.launchShift) : 0
+      const todo =
+        shift !== 0
+          ? `сдвиньте старт на ${Math.abs(shift)} дн. ${shift > 0 ? 'позже' : 'раньше'}`
+          : m.lag > 0
+            ? 'прилетите сюда позже'
+            : 'прилетите сюда раньше'
+      lines = [head, todo]
     } else lines = ['Промах', `${fmtMkm(Math.max(0, m.distance - f.level.target.zoneRadius))} до кольца цели, ${DAY(m.t - t0)}-й день`]
     callout(ctx, x, y, { color: COLORS.red, title: true, lines, board: this.board })
   }

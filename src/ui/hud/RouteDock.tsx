@@ -2,6 +2,7 @@ import { ArrowRight, Loader2, Play, Plus, Rocket, Spline } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import { CATALOG } from '../../game/levels/catalog'
 import { getLevel } from '../../game/levels/levels'
+import { TOURS } from '../../game/levels/tours'
 import { checkPlan } from '../../game/rules/evaluate'
 import { impulseMagnitude, sortedNodes } from '../../game/rules/plan'
 import { forecastRef } from '../../state/prediction'
@@ -68,7 +69,7 @@ export function LaunchButton({ className }: { className?: string }) {
   const queued = useGame((s) => s.launchQueued)
   const valid = checkPlan(level, plan).length === 0
   return (
-    <Button variant="go" size="xl" className={cn('min-w-[180px] shrink-0', className)} onClick={launch} disabled={!valid}>
+    <Button variant="go" size="xl" className={cn('min-w-[180px] shrink-0', className)} onClick={launch} disabled={!valid} data-tour="launch">
       {queued ? <Loader2 className="animate-spin" size={24} aria-hidden /> : <Play className="fill-current" size={24} aria-hidden />}
       Пуск
     </Button>
@@ -78,8 +79,10 @@ export function LaunchButton({ className }: { className?: string }) {
 /** Bottom panel: the route as a sequence of burns, the editor of the selected one, and the launch button. */
 export function RouteDock({ compact = false }: { compact?: boolean }) {
   const level = getLevel(useGame((s) => s.levelId))
-  // phones keep the map large; the editor opens on tap, except when the lesson is about the launch date
-  const [editorOpen, setEditorOpen] = useState(!compact || !!level.tutorial?.includes('launch-window'))
+  const tour = useGame((s) => s.tour)
+  // phones keep the map large; the editor opens on tap, or right away when the tour points into it
+  const tourUsesEditor = !!tour && (TOURS[tour.key] ?? []).some((st) => st.anchor && 'dom' in st.anchor && ['editor', 'launch-date'].includes(st.anchor.dom))
+  const [editorOpen, setEditorOpen] = useState(!compact || tourUsesEditor)
   const plan = useGame((s) => s.plan)
   const selection = useGame((s) => s.selection)
   const select = useGame((s) => s.select)
@@ -106,7 +109,12 @@ export function RouteDock({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <section className={cn('panel', compact ? 'p-3' : 'px-5 py-4 [@media(max-height:860px)]:py-3')} data-inset="bottom" aria-label="Маршрут">
+    <section
+      className={cn('panel', compact ? 'p-3' : 'px-5 py-4 [@media(max-height:860px)]:py-3')}
+      data-inset="bottom"
+      data-tour="route"
+      aria-label="Маршрут"
+    >
       <div className="flex items-center gap-4">
         {!compact && (
           <div className="w-[104px] shrink-0">
@@ -153,6 +161,7 @@ export function RouteDock({ compact = false }: { compact?: boolean }) {
               <button
                 type="button"
                 onClick={addAtCursor}
+                data-tour="add-node"
                 aria-label="Добавить коррекцию"
                 className="flex h-[58px] shrink-0 items-center gap-2 rounded-2xl border border-dashed border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors duration-150 hover:border-trail/60 hover:text-ink"
               >
@@ -171,7 +180,7 @@ export function RouteDock({ compact = false }: { compact?: boolean }) {
         <LaunchButton className={compact ? 'h-[58px] min-w-0 px-4 text-[18px]' : undefined} />
       </div>
       {selection && editorOpen && (
-        <div className={cn('hairline border-t', compact ? 'mt-2.5 pt-2.5' : 'mt-3 pt-3')}>
+        <div className={cn('hairline border-t', compact ? 'mt-2.5 pt-2.5' : 'mt-3 pt-3')} data-tour="editor">
           <BurnEditor compact={compact} />
         </div>
       )}

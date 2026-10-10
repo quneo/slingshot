@@ -124,13 +124,14 @@ export function useForecastView(): { view: StatusView; outcome: MissionOutcome |
 
 /** Forecast verdict: the honest answer to "will this plan work?" */
 export function ForecastStatus({ compact = false }: { compact?: boolean }) {
-  const { view, outcome, fresh } = useForecastView()
+  const { view, outcome } = useForecastView()
   const level = getLevel(useGame((s) => s.levelId))
   const t = TONE[view.tone]
   const Icon = t.icon
   return (
     <div
-      className={cn('rounded-xl border px-3 py-2.5 transition-colors duration-200', t.ring, !fresh && 'opacity-70')}
+      className={cn('rounded-xl border px-3 py-2.5 transition-colors duration-200', t.ring)}
+      data-tour="forecast"
       aria-live="polite"
     >
       <div className="flex items-start gap-2.5">

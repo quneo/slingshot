@@ -127,6 +127,7 @@ export function BurnEditor({ compact = false }: { compact?: boolean }) {
   const beginGesture = useGame((s) => s.beginGesture)
   const endGesture = useGame((s) => s.endGesture)
   const hintStep = useGame((s) => s.hintStep)
+  const forecastOutcome = useGame((s) => s.forecast.outcome)
 
   /** one slider drag = one undo step; ends on release even if the value never changed */
   const startSliderGesture = () => {
@@ -141,6 +142,10 @@ export function BurnEditor({ compact = false }: { compact?: boolean }) {
   }
 
   if (!selection) return null
+  const miss = forecastOutcome?.miss
+  const adviseDate =
+    (miss?.kind === 'timing' && miss.launchShift !== null) ||
+    (miss?.assist?.miss.kind === 'timing' && miss.assist.miss.launchShift !== null)
   const node = selection.kind === 'node' ? plan.nodes.find((n) => n.id === selection.id) : null
   if (selection.kind === 'node' && !node) return null
   const impulse: Impulse = node ?? plan.launch
@@ -210,7 +215,15 @@ export function BurnEditor({ compact = false }: { compact?: boolean }) {
     </div>
   )
   const dateControl = launchAdjustable && (
-    <div className={cn('flex flex-col gap-1', compact ? 'w-full' : 'min-w-[220px] flex-1')}>
+    <div
+      className={cn(
+        'flex flex-col gap-1 rounded-xl transition-shadow duration-200',
+        compact ? 'w-full' : 'min-w-[220px] flex-1',
+        // the forecast says the launch date is the thing to change: make the control easy to find
+        adviseDate && 'shadow-[0_0_0_2px_rgba(255,210,122,0.55)] p-1.5 -m-1.5',
+      )}
+      data-tour="launch-date"
+    >
       <span className="flex justify-between text-[12px] font-semibold text-ink-2">
         <span>Дата старта</span>
         <span className="num text-ink">

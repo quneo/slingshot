@@ -110,6 +110,57 @@
   }
 }
 
+/* tutorial: pulsing highlight and gesture hints */
+.tour-pulse {
+  animation: tour-pulse 1.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes tour-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.tour-drag {
+  animation: tour-drag 1.8s cubic-bezier(0.45, 0, 0.3, 1) infinite;
+}
+@keyframes tour-drag {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.88);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(var(--dx), var(--dy)) scale(0.88);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(1);
+  }
+}
+.tour-tap {
+  animation: tour-tap 1.4s ease-in-out infinite;
+}
+@keyframes tour-tap {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  45% {
+    transform: scale(0.82);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -6,6 +6,7 @@ import { MissionSelect } from '../ui/screens/MissionSelect'
 import { PlanningScreen } from '../ui/screens/PlanningScreen'
 import { ResultPanel } from '../ui/screens/ResultPanel'
 import { SettingsDialog } from '../ui/screens/SettingsDialog'
+import { Tour } from '../ui/tour/Tour'
 
 function useKeyboard() {
   useEffect(() => {
@@ -46,6 +47,7 @@ export function App() {
       {screen === 'mission' && phase === 'plan' && <PlanningScreen key={levelId} />}
       {screen === 'mission' && phase === 'flight' && <FlightHud />}
       {screen === 'mission' && phase === 'result' && <ResultPanel />}
+      {screen === 'mission' && <Tour />}
       <SettingsDialog />
     </main>
   )

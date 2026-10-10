@@ -44,8 +44,6 @@ export interface StarThresholds {
   timeForThree: number
 }
 
-export type TutorialStep = 'drag-impulse' | 'read-forecast' | 'launch' | 'launch-window' | 'add-node' | 'flyby'
-
 export interface LevelDef {
   id: string
   number: number
@@ -75,6 +73,5 @@ export interface LevelDef {
   hintWindow?: [number, number]
   /** hint 2 highlights this body */
   hintBody?: BodyId
-  tutorial?: TutorialStep[]
   camera: { x: number; y: number; radius: number }
 }

@@ -27,7 +27,7 @@ async function fresh(page: Page) {
           L1: { completed: true, stars: 3, best: { success: true, stars: 3, spentDv: 0.1, flightTime: 4.5, at: 0 }, attempts: [], lastPlan: null },
           L2: { completed: true, stars: 2, best: { success: true, stars: 2, spentDv: 0.18, flightTime: 6.2, at: 0 }, attempts: [], lastPlan: null },
         },
-        tutorialDone: ['L2', 'L3', 'L4', 'L5'],
+        tutorialDone: ['L1:plan', 'L1:flight', 'L2:plan', 'L3:plan', 'L4:plan', 'L5:plan', 'L6:plan'],
       }),
     )
   })

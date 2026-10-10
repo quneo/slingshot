@@ -9,7 +9,9 @@ ctx.onmessage = (event: MessageEvent<PredictRequest>) => {
   if (req.type !== 'predict') return
   try {
     const res = predict(req.requestId, req.levelId, req.plan)
-    ctx.postMessage(res satisfies WorkerResponse, [res.result.samples.buffer])
+    const transfer: ArrayBuffer[] = [res.result.samples.buffer as ArrayBuffer]
+    if (res.noAssist) transfer.push(res.noAssist.samples.buffer as ArrayBuffer)
+    ctx.postMessage(res satisfies WorkerResponse, transfer)
   } catch (err) {
     ctx.postMessage({ type: 'error', requestId: req.requestId, message: String(err) } satisfies WorkerResponse)
   }
