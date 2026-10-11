@@ -183,6 +183,12 @@ export class Sfx {
     this.tone(n * 1.5, 0.4, { type: 'triangle', gain: 0.05, delay: 0.07 })
   }
 
+  /** the forecast slid into a launch window: a soft rising "now!" */
+  window(): void {
+    this.tone(NOTES.G5, 0.25, { type: 'sine', gain: 0.1 })
+    this.tone(NOTES.C6, 0.4, { type: 'sine', gain: 0.12, delay: 0.09 })
+  }
+
   /** a giant's gravity takes the ship: deep swelling whoosh */
   flyby(): void {
     this.noise(1.4, { filter: 'lowpass', freq: 200, freqTo: 1400, q: 2, gain: 0.25, attack: 0.5 })

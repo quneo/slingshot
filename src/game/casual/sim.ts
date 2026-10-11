@@ -1,13 +1,11 @@
 import type { StateVector } from '../physics/ephemeris'
-import { findSampleIndex, newSample, sampleTrajectory, SAMPLE_STRIDE, type ShipSample } from '../physics/interpolate'
+import { newSample, sampleTrajectory, SAMPLE_STRIDE, type ShipSample } from '../physics/interpolate'
 import { departureRadius, propagate, type ApproachPoint, type FlybyRecord, type PropagationResult } from '../physics/propagate'
 import { bodyState } from '../physics/system'
-import type { CasualLevel } from './types'
-import { buildWorld, launchFrom, type CasualWorld } from './world'
+import type { Hop, Mission } from './types'
+import { freeCaptureSpeed, launchState, type CasualWorld } from './world'
 
 export const ESCAPE_RADIUS = 9.5
-/** stardust is picked up within this distance (model units) */
-export const STARDUST_RADIUS = 0.13
 /** a boost is never weaker than this share of a full charge (a quick tap) */
 export const MIN_CHARGE = 0.15
 /**
@@ -20,7 +18,7 @@ export const MAX_STEP = 0.08
 export interface Segment {
   t0: number
   result: PropagationResult
-  /** still leaving the home planet: it neither pulls nor stops the ship until the ship is clear of it */
+  /** still leaving the origin planet: it does not stop the ship until the ship is clear of it */
   departing: boolean
 }
 
@@ -42,46 +40,81 @@ function segmentEnd(seg: Segment): FlightEnd {
 
 const approachOf = (a: ApproachPoint): ApproachPoint => ({ t: a.t, distance: a.distance, relSpeed: a.relSpeed, x: a.x, y: a.y })
 
+/** Where a hop goes and from where; shared by the live flight and the aiming forecast. */
+export interface HopContext {
+  mission: Mission
+  world: CasualWorld
+  hop: Hop
+  origin: number
+  target: number
+}
+
+export function hopContext(mission: Mission, world: CasualWorld, hopIndex: number): HopContext {
+  const hop = mission.hops[hopIndex]
+  const origin = world.indexOf(hopIndex === 0 ? mission.start : mission.hops[hopIndex - 1].to)
+  return { mission, world, hop, origin, target: world.indexOf(hop.to) }
+}
+
+/** Propagates one ballistic stretch of a hop. */
+export function flyHop(ctx: HopContext, t0: number, state0: StateVector, departing: boolean, tEnd: number): PropagationResult {
+  return propagate({
+    system: ctx.world.systemFrom(ctx.origin),
+    t0,
+    state0,
+    burns: [],
+    tEnd,
+    target: { bodyIndex: ctx.target, zoneRadius: ctx.hop.zoneRadius, maxRelSpeed: null },
+    escapeRadius: ESCAPE_RADIUS,
+    departureBodyIndex: departing ? ctx.origin : null,
+    maxStep: MAX_STEP,
+  })
+}
+
+/** Δv the capture at the end of a hop takes: whatever the arrival exceeds the planet's escape speed by. */
+export function captureCost(ctx: HopContext, relSpeed: number): number {
+  return Math.max(0, relSpeed - freeCaptureSpeed(ctx.world, ctx.target, ctx.hop.zoneRadius))
+}
+
+/** The aiming forecast: a throw at time t from the origin, up to the hop's preview length. */
+export function forecastHop(ctx: HopContext, t: number, dvx: number, dvy: number): PropagationResult {
+  const until = t + Math.min(ctx.hop.previewTime, ctx.hop.maxFlight)
+  return flyHop(ctx, t, launchState(ctx.world, ctx.origin, t, dvx, dvy), true, until)
+}
+
 /**
- * A live flight: the same honest propagator, re-run from the current state every time the player boosts.
- * Everything is deterministic: the same launch and the same boosts at the same times give the same flight.
+ * One hop in flight: the same honest propagator, re-run from the current state every time the player boosts.
+ * Deterministic: the same launch and the same boosts at the same times give the same flight.
  */
 export class Flight {
-  readonly world: CasualWorld
   readonly segments: Segment[] = []
-  readonly collected: boolean[]
   readonly boostsUsed: { t: number; dvx: number; dvy: number }[] = []
-  private fuelUsed = 0
+  readonly tEnd: number
+  private boostDv = 0
   private readonly tmp = newSample()
 
   constructor(
-    readonly level: CasualLevel,
+    readonly ctx: HopContext,
+    readonly launchTime: number,
     readonly launch: { dvx: number; dvy: number },
-    world?: CasualWorld,
+    /** fuel in the tank after paying for the launch */
+    readonly fuelAtLaunch: number,
   ) {
-    this.world = world ?? buildWorld(level)
-    this.collected = level.stardust.map(() => false)
-    this.segments.push({ t0: 0, result: this.fly(0, launchFrom(this.world, launch.dvx, launch.dvy), true), departing: true })
+    this.tEnd = launchTime + ctx.hop.maxFlight
+    const st = launchState(ctx.world, ctx.origin, launchTime, launch.dvx, launch.dvy)
+    this.segments.push({ t0: launchTime, result: flyHop(ctx, launchTime, st, true, this.tEnd), departing: true })
   }
 
-  /** Δv still in the tank, model units */
+  get world(): CasualWorld {
+    return this.ctx.world
+  }
+
+  /** Δv spent on boosts in this hop */
+  get boostSpent(): number {
+    return this.boostDv
+  }
+
   get fuelLeft(): number {
-    return Math.max(0, this.level.fuel - this.fuelUsed)
-  }
-
-  /** Δv a boost charged to `charge` (0…1) gives right now: a quick tap is weak, the tank may run dry. */
-  boostSize(charge: number): number {
-    const want = this.level.boostMax * Math.min(1, Math.max(MIN_CHARGE, charge))
-    return Math.min(want, this.fuelLeft)
-  }
-
-  /** The state just after a boost of `charge` at time t towards (dirX, dirY), or null when not possible. */
-  boostState(t: number, dirX: number, dirY: number, charge: number): StateVector | null {
-    const len = Math.hypot(dirX, dirY)
-    const dv = this.boostSize(charge)
-    if (dv < 1e-9 || len < 1e-9 || t >= this.end.t) return null
-    const s = this.stateAt(t, newSample())
-    return { x: s.x, y: s.y, vx: s.vx + (dirX / len) * dv, vy: s.vy + (dirY / len) * dv }
+    return Math.max(0, this.fuelAtLaunch - this.boostDv)
   }
 
   get current(): Segment {
@@ -90,6 +123,18 @@ export class Flight {
 
   get end(): FlightEnd {
     return segmentEnd(this.current)
+  }
+
+  /** speed relative to the target on arrival (null unless arrived) */
+  get arrivalSpeed(): number | null {
+    const a = this.current.result.arrival
+    return this.end.reason === 'arrived' && a ? a.relSpeed : null
+  }
+
+  /** Δv the capture will take on arrival (null unless arrived) */
+  get captureCost(): number | null {
+    const v = this.arrivalSpeed
+    return v === null ? null : captureCost(this.ctx, v)
   }
 
   private segmentAt(t: number): Segment {
@@ -102,34 +147,34 @@ export class Flight {
     return sampleTrajectory(seg.result.samples, seg.result.sampleCount, Math.min(t, seg.result.endTime), out)
   }
 
-  private fly(t0: number, state0: StateVector, departing: boolean, tEnd = this.level.horizon): PropagationResult {
-    const { system, homeIndex, targetIndex } = this.world
-    return propagate({
-      system,
-      t0,
-      state0,
-      burns: [],
-      tEnd,
-      target: { bodyIndex: targetIndex, zoneRadius: this.level.target.zoneRadius, maxRelSpeed: null },
-      escapeRadius: ESCAPE_RADIUS,
-      departureBodyIndex: departing ? homeIndex : null,
-      maxStep: MAX_STEP,
-    })
+  /** Δv a boost charged to `charge` (0…1) gives right now: a quick tap is weak, the tank may run dry. */
+  boostSize(charge: number): number {
+    const want = this.ctx.mission.boostMax * Math.min(1, Math.max(MIN_CHARGE, charge))
+    return Math.min(want, this.fuelLeft)
+  }
+
+  /** The state just after a boost of `charge` at time t towards (dirX, dirY), or null when not possible. */
+  boostState(t: number, dirX: number, dirY: number, charge: number): StateVector | null {
+    const len = Math.hypot(dirX, dirY)
+    const dv = this.boostSize(charge)
+    if (dv < 1e-9 || len < 1e-9 || t >= this.end.t || t < this.launchTime) return null
+    const s = this.stateAt(t, newSample())
+    return { x: s.x, y: s.y, vx: s.vx + (dirX / len) * dv, vy: s.vy + (dirY / len) * dv }
   }
 
   /**
-   * A boost right after the launch, while the ship is still inside the home planet's departure radius, keeps the
-   * departure rules. Once the ship has been clear of the planet, it is an ordinary body again — even if the ship
-   * comes back to it later (otherwise a boost there would switch its gravity and surface off).
+   * A boost right after the launch, while the ship is still inside the origin's departure radius, keeps the
+   * departure rules. Once the ship has been clear of the planet, it is an ordinary solid body again.
    */
   private stillDeparting(t: number): boolean {
     const seg = this.segmentAt(t)
     if (!seg.departing) return false
-    const { system, homeIndex } = this.world
-    const limit = departureRadius(system.bodies[homeIndex])
+    const { system } = this.world
+    const origin = this.ctx.origin
+    const limit = departureRadius(system.bodies[origin])
     const r = seg.result
     const clear = (x: number, y: number, tk: number) => {
-      const p = bodyState(system, homeIndex, tk)
+      const p = bodyState(system, origin, tk)
       return Math.hypot(x - p.x, y - p.y) >= limit
     }
     for (let k = 0; k < r.sampleCount; k++) {
@@ -141,30 +186,30 @@ export class Flight {
     return !clear(s.x, s.y, t)
   }
 
-  /** Fires a boost of `charge` (0…1) at time t towards (dirX, dirY) (any length). Returns false when not possible. */
+  /** Fires a boost of `charge` (0…1) at time t towards (dirX, dirY). Returns false when not possible. */
   boost(t: number, dirX: number, dirY: number, charge: number): boolean {
     const st = this.boostState(t, dirX, dirY, charge)
     if (!st) return false
     const before = this.stateAt(t, newSample())
     const dvx = st.vx - before.vx
     const dvy = st.vy - before.vy
-    this.fuelUsed += Math.hypot(dvx, dvy)
+    this.boostDv += Math.hypot(dvx, dvy)
     this.boostsUsed.push({ t, dvx, dvy })
     const departing = this.stillDeparting(t)
-    this.segments.push({ t0: t, result: this.fly(t, st, departing), departing })
+    this.segments.push({ t0: t, result: flyHop(this.ctx, t, st, departing, this.tEnd), departing })
     return true
   }
 
-  /** Where the flight would go after such a boost, for the charging preview (up to `until`). */
-  previewBoost(t: number, dirX: number, dirY: number, charge: number, until: number): PropagationResult | null {
+  /** Where the flight would go after such a boost, for the charging forecast (up to `ahead` model time). */
+  previewBoost(t: number, dirX: number, dirY: number, charge: number, ahead: number): PropagationResult | null {
     const st = this.boostState(t, dirX, dirY, charge)
-    return st ? this.fly(t, st, this.stillDeparting(t), Math.min(this.level.horizon, t + until)) : null
+    return st ? flyHop(this.ctx, t, st, this.stillDeparting(t), Math.min(this.tEnd, t + ahead)) : null
   }
 
   /**
-   * Flybys of the flight as actually flown. A boost cuts off what the earlier segment predicted after it; a flyby the
-   * boost interrupted continues in the next segment and is merged back into one record, with the boost counted as
-   * engine energy (so it never shows up as gravity gain).
+   * Flybys as actually flown. A boost cuts off what the earlier segment predicted after it; a flyby the boost
+   * interrupted continues in the next segment and is merged back into one record, with the boost counted as engine
+   * energy (never as gravity gain) and the closest approach taken only along the part actually flown.
    */
   flybys(): FlybyRecord[] {
     const mu = this.world.system.centralMu
@@ -179,8 +224,6 @@ export class Flight {
       for (const f of seg.result.flybys) {
         if (f.tIn > until) continue
         const cut = !!next && f.tOut > until
-        // the closest approach counts only along the part actually flown: past the boost the segment's
-        // prediction never happened
         const near: ApproachPoint = cut ? this.closestBetween(seg, f.bodyIndex, Math.max(seg.t0, f.tIn), until) : f
         let rec: FlybyRecord = { ...f, ...approachOf(near) }
         const k = incoming.findIndex((p) => p.bodyIndex === f.bodyIndex)
@@ -233,47 +276,4 @@ export class Flight {
     consider(t1)
     return best
   }
-
-  /** Picks up stardust touched between t0 and t1; returns the indices collected now. */
-  collect(t0: number, t1: number): number[] {
-    const got: number[] = []
-    const end = Math.min(t1, this.end.t)
-    if (end <= t0) return got
-    const steps = Math.max(1, Math.ceil((end - t0) / 0.004))
-    const s = this.tmp
-    for (let k = 0; k <= steps; k++) {
-      this.stateAt(t0 + ((end - t0) * k) / steps, s)
-      this.level.stardust.forEach(([x, y], i) => {
-        if (!this.collected[i] && Math.hypot(s.x - x, s.y - y) <= STARDUST_RADIUS) {
-          this.collected[i] = true
-          got.push(i)
-        }
-      })
-    }
-    return got
-  }
-
-  /** Plays the whole flight at once (tests, tools, the level constructor). */
-  runToEnd(): this {
-    this.collect(0, this.end.t)
-    return this
-  }
 }
-
-/** Positions along the first segment, for the aiming preview (up to `until`). */
-export function previewPath(level: CasualLevel, world: CasualWorld, dvx: number, dvy: number, until: number): PropagationResult {
-  return propagate({
-    system: world.system,
-    t0: 0,
-    state0: launchFrom(world, dvx, dvy),
-    burns: [],
-    tEnd: Math.min(until, level.horizon),
-    target: { bodyIndex: world.targetIndex, zoneRadius: level.target.zoneRadius, maxRelSpeed: null },
-    escapeRadius: ESCAPE_RADIUS,
-    departureBodyIndex: world.homeIndex,
-    maxStep: MAX_STEP,
-  })
-}
-
-/** Index helper re-exported for renderers walking a segment. */
-export { findSampleIndex, SAMPLE_STRIDE }

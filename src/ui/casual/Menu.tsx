@@ -1,13 +1,13 @@
 import { Lock, Star, Volume2, VolumeX } from 'lucide-react'
 import { sfx } from '../../game/casual/audio'
-import { CASUAL_LEVELS, CHAPTERS } from '../../game/casual/levels'
-import { chapterOpen, levelOpen, recordOf, totalStars } from '../../game/casual/progress'
+import { CHAPTERS, MISSIONS } from '../../game/casual/levels'
+import { chapterOpen, missionOpen, recordOf, totalStars } from '../../game/casual/progress'
 import { cn } from '../../lib/utils'
 import { useCasual } from '../../state/casualStore'
 import { Button } from '../components/button'
 import { Wordmark } from '../hud/Wordmark'
 
-const MAX_STARS = CASUAL_LEVELS.length * 3
+const MAX_STARS = MISSIONS.length * 3
 
 export function Menu() {
   const save = useCasual((s) => s.save)
@@ -16,7 +16,7 @@ export function Menu() {
   const toggleMute = useCasual((s) => s.toggleMute)
   const stars = totalStars(save)
   // the first open level not finished yet glows: "play this"
-  const nextUp = CASUAL_LEVELS.find((l) => levelOpen(save, l.id, unlockAll) && !recordOf(save, l.id).done)
+  const nextUp = MISSIONS.find((l) => missionOpen(save, l.id, unlockAll) && !recordOf(save, l.id).done)
 
   return (
     <div className="scroll-thin absolute inset-0 overflow-y-auto">
@@ -38,7 +38,7 @@ export function Menu() {
         <div className="animate-rise" data-inset="below">
           <Wordmark />
           <p className="mt-4 max-w-[400px] text-[15px] leading-relaxed text-ink-2">
-            Брось корабль, как из рогатки. Пролети мимо гиганта — и он разгонит тебя бесплатно.
+            Прыгай с планеты на планету на одном баке. Планеты не ждут: лови окно старта — и прыжок обойдётся дёшево.
           </p>
           <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-gold/30 bg-gold/10 px-3 py-1.5 text-[13px] font-bold text-gold">
             <Star size={15} className="fill-gold" aria-hidden />
@@ -50,7 +50,7 @@ export function Menu() {
 
         {CHAPTERS.map((ch, ci) => {
           const open = chapterOpen(save, ch.number, unlockAll)
-          const levels = CASUAL_LEVELS.filter((l) => l.chapter === ch.number)
+          const levels = MISSIONS.filter((l) => l.chapter === ch.number)
           return (
             <section key={ch.number} className="animate-rise" style={{ animationDelay: `${80 + ci * 70}ms` }}>
               <div className="mb-2.5 flex items-baseline justify-between gap-3">
@@ -66,7 +66,7 @@ export function Menu() {
               <div className="grid grid-cols-4 gap-2">
                 {levels.map((l) => {
                   const rec = recordOf(save, l.id)
-                  const unlocked = levelOpen(save, l.id, unlockAll)
+                  const unlocked = missionOpen(save, l.id, unlockAll)
                   const hot = l === nextUp
                   return (
                     <button
@@ -104,10 +104,10 @@ export function Menu() {
           )
         })}
         <p className="text-[12px] leading-relaxed text-ink-3">
-          Звёзды — это звёздная пыль: она лежит на самом крутом маршруте. Главы открываются звёздами.
+          Звёзды — за экономию топлива. Главы открываются звёздами.
           <span className="mt-1.5 block max-md:hidden">
-            Клавиатура: ←/→ — направление, ↑/↓ — сила (с Shift — крупнее), Пробел — бросок. В полёте удерживайте Пробел
-            для ускорителя, ←/→ поворачивают толчок. R — заново, Esc — к миссиям.
+            Клавиатура: ←/→ — направление, ↑/↓ — сила (с Shift — крупнее), Пробел — бросок, держите F — ждать быстрее.
+            В полёте удерживайте Пробел для ускорителя, ←/→ поворачивают толчок. R — прыжок заново, Esc — к миссиям.
           </span>
         </p>
       </div>

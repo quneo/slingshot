@@ -1,22 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { sfx } from '../../game/casual/audio'
-import { CASUAL_LEVELS, getCasualLevel } from '../../game/casual/levels'
-import { CasualRenderer, type InputView } from '../../game/casual/render/renderer'
-import { POINTS } from '../../game/casual/scoring'
+import { getMission, MISSIONS } from '../../game/casual/levels'
+import { CasualRenderer, DECENT_RATIO, type InputView, WINDOW_RATIO } from '../../game/casual/render/renderer'
 import { Session, type GameEvent } from '../../game/casual/session'
 import { accusativeOf, genitiveOf } from '../../game/levels/names'
 import { bodyState } from '../../game/physics/system'
+import { toDays, toKms } from '../../game/physics/units'
 import { loadAssets } from '../../game/rendering/assets'
 import type { Insets } from '../../game/rendering/camera'
 import { COLORS } from '../../game/rendering/palette'
-import { useCasual } from '../../state/casualStore'
+import { useCasual, type ForecastHud } from '../../state/casualStore'
 
-/** The menu backdrop replays the grand tour. */
-const DEMO = CASUAL_LEVELS[CASUAL_LEVELS.length - 1]
+/** The menu backdrop flies the grand tour by itself. */
+const DEMO = MISSIONS[MISSIONS.length - 1]
 /** pulls shorter than this (px) are taps, not launches */
 const MIN_PULL = 14
-/** a result card waits for the victory lap */
-const RESULT_DELAY = 1.4
+/** the result card waits for the capture moment */
+const RESULT_DELAY = 0.8
 
 function measureInsets(): Insets {
   const w = window.innerWidth
@@ -38,16 +38,25 @@ function measureInsets(): Insets {
   return ins
 }
 
+const kms = (v: number) => toKms(v).toFixed(1).replace('.', ',')
+
 function failureText(s: Session, e: Extract<GameEvent, { kind: 'failed' }>): { title: string; text: string } {
-  if (e.reason === 'crashed') {
-    const id = e.bodyIndex !== null ? s.world.planetOf[e.bodyIndex] : null
-    if (id === 'lyra') return { title: 'Сгорел в короне Лиры', text: 'Звезда тянет сильнее всех — держись от неё подальше' }
-    if (!id) return { title: 'Врезался в астероид', text: 'Проскочи между камнями — или подожди, пока они пролетят' }
-    if (e.bodyIndex === s.world.targetIndex) return { title: `Врезался в ${accusativeOf(id)}`, text: 'Почти! Целься в кольцо, а не в саму планету' }
-    return { title: `Врезался в ${accusativeOf(id)}`, text: `Пролетай мимо ${genitiveOf(id)}, а не в него — праща работает на краю` }
+  const id = e.bodyIndex !== null ? s.world.planetOf[e.bodyIndex] : null
+  switch (e.reason) {
+    case 'crashed':
+      if (id === 'lyra') return { title: 'Сгорел в короне Лиры', text: 'Звезда тянет сильнее всех — держись от неё подальше' }
+      if (!id) return { title: 'Врезался в астероид', text: 'Камни летят своей дорогой: выбери окно, когда в поясе просвет' }
+      if (e.bodyIndex === s.target) return { title: `Врезался в ${accusativeOf(id)}`, text: 'Целься в кольцо вокруг планеты, а не в саму планету' }
+      return { title: `Врезался в ${accusativeOf(id)}`, text: `Пролетай мимо ${genitiveOf(id)}, а не в него` }
+    case 'lost':
+      return { title: 'Улетел в пустоту', text: 'Слишком сильный бросок. Шаг начнётся заново' }
+    case 'timeout':
+      return { title: 'Разминулся с целью', text: 'Дождись окна: копия цели должна встретить твой путь' }
+    case 'fuel':
+      return { title: 'Не хватило топлива на захват', text: `Нужно ещё ${kms(e.need)} км/с. Подлетай медленнее — лови окно точнее` }
+    case 'deadline':
+      return { title: 'Срок вышел', text: 'Долго ждал окон. Миссия начнётся сначала' }
   }
-  if (e.reason === 'lost') return { title: 'Улетел в пустоту', text: 'Слишком сильно. Призрак покажет, где ты пролетел' }
-  return { title: 'Не долетел', text: 'Попробуй сильнее или по-другому — тут нужна праща' }
 }
 
 export function Stage() {
@@ -79,8 +88,10 @@ export function Stage() {
         /** keyboard boost being held (Space), turned from the ship's heading by ←/→ */
         let keyCharge = false
         let keyTurn = 0
-        let lastPhase = session.phase
+        let keyFast = false
         let insetsAt = -Infinity
+        /** the forecast was in a window last frame (a chime when it opens) */
+        let inWindow = false
 
         const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
         const syncMotion = () => {
@@ -99,33 +110,45 @@ export function Stage() {
         resizeObs = new ResizeObserver(resize)
         resizeObs.observe(canvas.parentElement!)
 
-        const syncLevel = () => {
-          const st = useCasual.getState()
-          const wantMenu = st.screen === 'menu'
-          const want = wantMenu ? DEMO : getCasualLevel(st.levelId)
-          if (wantMenu === menu && session.level === want) return
-          menu = wantMenu
-          session = new Session(want)
-          // start close to the new view, then settle in: quick, but still a "fly-in"
-          renderer.camera.insets = measureInsets()
-          const v = renderer.camera.fitView(want.view.x, want.view.y, want.view.radius)
-          renderer.camera.set({ ...v, zoom: v.zoom * 0.7 })
-          fx.clear()
-          resultAt = -1
+        const forgetGestures = () => {
           drag = null
           chargeId = null
           keyCharge = false
           input.pull = null
           sfx.chargeStop()
         }
-        cleanups.push(useCasual.subscribe((st, prev) => {
-          if (st.screen !== prev.screen || st.levelId !== prev.levelId) syncLevel()
-          if (st.restartTick !== prev.restartTick && !menu) {
-            session.reset()
-            resultAt = -1
-            sfx.chargeStop()
-          }
-        }))
+        const syncLevel = () => {
+          const st = useCasual.getState()
+          const wantMenu = st.screen === 'menu'
+          const want = wantMenu ? DEMO : getMission(st.levelId)
+          if (wantMenu === menu && session.mission === want) return
+          menu = wantMenu
+          session = new Session(want)
+          // start close to the first view, then settle in: quick, but still a fly-in
+          renderer.camera.insets = measureInsets()
+          const v0 = want.hops[0].view
+          const v = renderer.camera.fitView(v0.x, v0.y, v0.radius)
+          renderer.camera.set({ ...v, zoom: v.zoom * 0.7 })
+          fx.clear()
+          resultAt = -1
+          forgetGestures()
+        }
+        cleanups.push(
+          useCasual.subscribe((st, prev) => {
+            if (st.screen !== prev.screen || st.levelId !== prev.levelId) syncLevel()
+            if (menu) return
+            if (st.restartTick !== prev.restartTick) {
+              session.retryHop()
+              resultAt = -1
+              forgetGestures()
+            }
+            if (st.missionTick !== prev.missionTick) {
+              session.restartMission()
+              resultAt = -1
+              forgetGestures()
+            }
+          }),
+        )
         syncLevel()
 
         // ── input
@@ -135,9 +158,10 @@ export function Stage() {
         }
         const aimFromPull = (px: number, py: number) => {
           const len = Math.hypot(px, py)
-          const k = len > input.maxPull ? input.maxPull / len : 1
+          const limit = (input.maxPull * session.maxThrow) / session.mission.power
+          const k = len > limit ? limit / len : 1
           input.pull = { x: px * k, y: py * k }
-          const p = session.level.power
+          const p = session.mission.power
           session.setAim((-input.pull.x / input.maxPull) * p, (input.pull.y / input.maxPull) * p)
         }
         const worldDir = (x: number, y: number) => ({ x: x - renderer.shipX, y: -(y - renderer.shipY) })
@@ -148,6 +172,9 @@ export function Stage() {
             // synthetic or already released pointer: dragging still works while it stays over the canvas
           }
         }
+        const launch = () => {
+          if (session.launch()) useCasual.getState().markLaunched(session.mission.id)
+        }
 
         const onDown = (e: PointerEvent) => {
           sfx.unlock()
@@ -155,10 +182,15 @@ export function Stage() {
           if (e.pointerType === 'mouse' && e.button !== 0) return
           if (menu || useCasual.getState().result) return
           const p = local(e)
-          if (session.phase === 'failed') session.reset()
-          if (session.phase === 'aim' && !drag) {
+          if (session.phase === 'failed') {
+            // no need to wait: straight back to the start of the hop
+            if (session.failure?.reason === 'deadline') session.restartMission()
+            else session.retryHop()
+          }
+          if (session.phase === 'parked' && !drag) {
             capture(e.pointerId)
             drag = { id: e.pointerId, x0: p.x, y0: p.y, history: [{ t: performance.now(), x: p.x, y: p.y }] }
+            session.aiming = true
             aimFromPull(0, 0)
           } else if (session.phase === 'flight' && chargeId === null && !keyCharge) {
             const d = worldDir(p.x, p.y)
@@ -194,8 +226,9 @@ export function Stage() {
             const before = drag.history.find((h) => now - h.t <= 70) ?? drag.history[drag.history.length - 1]
             if (Math.hypot(p.x - before.x, p.y - before.y) < 10) aimFromPull(before.x - drag.x0, before.y - drag.y0)
             const pulled = input.pull ? Math.hypot(input.pull.x, input.pull.y) : 0
-            if (pulled >= MIN_PULL && session.launch()) useCasual.getState().markLaunched(session.level.id)
-            else session.clearAim()
+            session.aiming = false
+            if (pulled >= MIN_PULL) launch()
+            if (session.phase === 'parked') session.clearAim()
             drag = null
             input.pull = null
           } else if (chargeId === e.pointerId) {
@@ -207,6 +240,7 @@ export function Stage() {
           if (drag && e.pointerId === drag.id) {
             drag = null
             input.pull = null
+            session.aiming = false
             session.clearAim()
           } else if (chargeId === e.pointerId) {
             chargeId = null
@@ -227,13 +261,13 @@ export function Stage() {
             session.cancelCharge()
             sfx.chargeStop()
           }
+          keyFast = false
         }
 
-        // ── keyboard: ←/→ turn and ↑/↓ stretch the throw, Space throws; in flight hold Space to boost
+        // ── keyboard: ←/→ turn and ↑/↓ stretch the throw, Space throws, hold F to wait faster; in flight hold Space
         const DEG = Math.PI / 180
         const keyDir = () => {
           const st = session.ship()
-          if (!st) return null
           const a = Math.atan2(st.vy, st.vx) + keyTurn
           return { x: Math.cos(a), y: Math.sin(a) }
         }
@@ -242,35 +276,36 @@ export function Stage() {
           if ((e.target as HTMLElement | null)?.closest?.('button, input, textarea, a')) return
           const arrow = e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown'
           const step = e.shiftKey ? 5 : 1
-          if (arrow && (session.phase === 'aim' || session.phase === 'failed')) {
+          if (e.key === 'f' || e.key === 'F' || e.key === 'а' || e.key === 'А') {
+            keyFast = true
+          } else if (arrow && session.phase === 'parked') {
             e.preventDefault()
             sfx.unlock()
-            if (session.phase === 'failed') session.reset()
-            const power = session.level.power
+            const power = session.mission.power
             let aim = session.aim
             if (!aim) {
-              const home = bodyState(session.world.system, session.world.homeIndex, 0)
+              const home = bodyState(session.world.system, session.origin, session.t)
               const len = Math.hypot(home.vx, home.vy)
-              aim = { dvx: (home.vx / len) * power * 0.5, dvy: (home.vy / len) * power * 0.5 }
+              aim = { dvx: (home.vx / len) * power * 0.4, dvy: (home.vy / len) * power * 0.4 }
             }
             let ang = Math.atan2(aim.dvy, aim.dvx)
             let mag = Math.hypot(aim.dvx, aim.dvy)
             if (e.key === 'ArrowLeft') ang += step * DEG
             if (e.key === 'ArrowRight') ang -= step * DEG
-            if (e.key === 'ArrowUp') mag = Math.min(power, mag + power * 0.02 * step)
-            if (e.key === 'ArrowDown') mag = Math.max(power * 0.1, mag - power * 0.02 * step)
+            if (e.key === 'ArrowUp') mag = Math.min(session.maxThrow, mag + power * 0.01 * step)
+            if (e.key === 'ArrowDown') mag = Math.max(power * 0.05, mag - power * 0.01 * step)
             session.setAim(Math.cos(ang) * mag, Math.sin(ang) * mag)
             input.pull = { x: (-Math.cos(ang) * mag * input.maxPull) / power, y: (Math.sin(ang) * mag * input.maxPull) / power }
             sfx.stretch(mag / power)
-          } else if ((e.key === ' ' || e.key === 'Enter') && session.phase === 'aim' && session.aim && !e.repeat) {
+          } else if ((e.key === ' ' || e.key === 'Enter') && session.phase === 'parked' && session.aim && !e.repeat) {
             e.preventDefault()
-            if (session.launch()) useCasual.getState().markLaunched(session.level.id)
+            launch()
             input.pull = null
           } else if (e.key === ' ' && session.phase === 'flight' && !e.repeat && !keyCharge && chargeId === null) {
             e.preventDefault()
             keyTurn = 0
             const d = keyDir()
-            if (d && session.startCharge(d.x, d.y)) {
+            if (session.startCharge(d.x, d.y)) {
               keyCharge = true
               sfx.chargeStart()
             }
@@ -280,6 +315,7 @@ export function Stage() {
           } else if (e.key === ' ') e.preventDefault()
         }
         const onKeyUp = (e: KeyboardEvent) => {
+          if (e.key === 'f' || e.key === 'F' || e.key === 'а' || e.key === 'А') keyFast = false
           if (e.key !== ' ' || !keyCharge) return
           keyCharge = false
           if (!session.releaseCharge()) sfx.chargeStop()
@@ -324,8 +360,9 @@ export function Stage() {
               sfx.launch(e.power)
               sfx.buzz(15)
               fx.kick(3 + e.power * 5)
-              const home = bodyState(session.world.system, session.world.homeIndex, 0)
+              const home = bodyState(session.world.system, session.origin, session.t)
               fx.burst(home.x, home.y, zoom, { count: 26, speed: 190, colors: ['#BDF1FF', COLORS.cyan, '#FFFFFF'], size: 2.2, life: 0.6, drag: 0.08 })
+              fx.popup(home.x, home.y, `−${kms(e.cost)} км/с`, COLORS.cyan, null, 17, 1.1)
               break
             }
             case 'boost':
@@ -337,12 +374,6 @@ export function Stage() {
                 colors: [COLORS.amber, '#FFE2A8', '#FFFFFF'], size: 2.2, life: 0.55, drag: 0.1,
               })
               break
-            case 'dust':
-              sfx.dust(e.count)
-              sfx.buzz(10)
-              fx.burst(e.x, e.y, zoom, { count: 30, speed: 170, colors: [COLORS.gold, '#FFF4D6', COLORS.amber], size: 2.4, life: 0.8, drag: 0.06 })
-              fx.popup(e.x, e.y, `+${POINTS.stardust}`, COLORS.gold, e.count === 3 ? 'ВСЯ ПЫЛЬ!' : `пыль ${e.count}/3`, 20, 1.3)
-              break
             case 'flybyIn':
               sfx.flyby()
               break
@@ -352,31 +383,28 @@ export function Stage() {
               fx.kick(5 + Math.min(6, Math.abs(e.gainKms) * 0.4))
               fx.flashOnce(0.35)
               const ship = session.ship()
-              if (ship) {
-                fx.burst(ship.x, ship.y, zoom, { count: 34, speed: 230, colors: [COLORS.amber, COLORS.gold, '#FFFFFF'], size: 2.6, life: 0.9, drag: 0.08 })
-                const sign = e.gainKms >= 0 ? '+' : '−'
-                const title = e.combo > 1 ? `ПРАЩА ×${e.combo}!` : 'ПРАЩА!'
-                fx.popup(ship.x, ship.y, title, COLORS.amber, `${sign}${Math.abs(e.gainKms).toFixed(1)} км/с${e.gainKms < 0 ? ' · тормоз' : ''}`, 30, 1.9)
-                if (e.close) {
-                  sfx.closePass()
-                  fx.popup(ship.x, ship.y, 'ВПРИТИРКУ!', COLORS.cyan, `+${POINTS.closePass}`, 20, 1.6, 0.35)
-                }
+              fx.burst(ship.x, ship.y, zoom, { count: 34, speed: 230, colors: [COLORS.amber, COLORS.gold, '#FFFFFF'], size: 2.6, life: 0.9, drag: 0.08 })
+              const sign = e.gainKms >= 0 ? '+' : '−'
+              fx.popup(ship.x, ship.y, e.combo > 1 ? `ПРАЩА ×${e.combo}!` : 'ПРАЩА!', COLORS.amber, `${sign}${Math.abs(e.gainKms).toFixed(1).replace('.', ',')} км/с даром`, 30, 1.9)
+              if (e.close) {
+                sfx.closePass()
+                fx.popup(ship.x, ship.y, 'ВПРИТИРКУ!', COLORS.cyan, null, 20, 1.6, 0.35)
               }
               store.showGain(e.gainKms)
               break
             }
-            case 'arrived':
+            case 'captured': {
               stopCharging()
               sfx.arrive()
-              sfx.buzz([30, 60, 30, 60, 60])
-              fx.flashOnce(0.9)
-              fx.kick(4)
-              for (let k = 0; k < 3; k++) {
-                fx.burst(e.x, e.y, zoom, {
-                  count: 40, speed: 160 + k * 90, colors: [COLORS.gold, COLORS.cyan, '#FFFFFF', COLORS.green], size: 2.6, life: 1.4, drag: 0.12,
-                })
-              }
-              fx.popup(e.x, e.y, 'ДОЛЕТЕЛ!', COLORS.gold, null, 34, 2.2)
+              sfx.buzz([30, 60, 30])
+              fx.flashOnce(e.last ? 0.9 : 0.5)
+              fx.kick(3)
+              fx.burst(e.x, e.y, zoom, { count: 40, speed: 170, colors: [COLORS.gold, COLORS.cyan, '#FFFFFF', COLORS.green], size: 2.5, life: 1.2, drag: 0.12 })
+              const free = e.cost < 1e-4
+              fx.popup(e.x, e.y, e.last ? 'МИССИЯ ВЫПОЛНЕНА!' : 'ЗАХВАТ!', e.last ? COLORS.gold : COLORS.green, free ? 'бесплатно: планета поймала сама' : `торможение −${kms(e.cost)} км/с`, e.last ? 28 : 30, 2)
+              break
+            }
+            case 'complete':
               resultAt = now + RESULT_DELAY
               break
             case 'failed': {
@@ -396,6 +424,34 @@ export function Stage() {
           }
         }
 
+        /** The demo in the menu flies every hop on its reference window, fast-forwarding the waits. */
+        const autopilot = () => {
+          const hop = session.ctx.hop
+          if (session.phase === 'parked') {
+            const at = session.checkpoint.t + hop.reference.wait
+            session.fastForward = session.t < at - hop.parkPace * 0.5
+            if (session.t >= at) {
+              session.setAim(hop.reference.dvx, hop.reference.dvy)
+              session.launch()
+            }
+          } else if ((session.phase === 'complete' || session.phase === 'failed') && session.phaseClock > 2.5) session.restartMission()
+        }
+
+        const forecastHud = (): ForecastHud | null => {
+          if (session.phase !== 'parked' || !session.aim) return null
+          const f = session.forecast()
+          if (!f) return null
+          const q = (v: number) => Math.round(toKms(v) * 10) / 10
+          const total = f.captureCost === null ? null : f.launchCost + f.captureCost
+          return {
+            launch: q(f.launchCost),
+            capture: f.captureCost === null ? null : q(f.captureCost),
+            total: total === null ? null : q(total),
+            ratio: total === null ? null : Math.round((total / session.ctx.hop.refCost) * 100) / 100,
+            affordable: total === null || total <= session.fuel + 1e-12,
+          }
+        }
+
         // ── the loop
         let last = performance.now()
         const frame = (ms: number) => {
@@ -404,45 +460,57 @@ export function Stage() {
           const dt = Math.min(0.05, Math.max(0, (ms - last) / 1000))
           last = ms
           const store = useCasual.getState()
+          if (menu) autopilot()
+          else session.fastForward = store.fastForward || keyFast
           if (keyCharge) {
             const d = keyDir()
-            if (d) session.aimCharge(d.x, d.y)
+            session.aimCharge(d.x, d.y)
           }
           session.update(dt)
           const events = session.drain()
-          // a new attempt starts clean: no speed gain left over from the last one, no keyboard band
-          if (session.phase === 'aim' && lastPhase !== 'aim') {
-            if (useCasual.getState().gain) useCasual.setState({ gain: null })
-            if (!drag) input.pull = null
-          }
-          lastPhase = session.phase
-          if (menu) {
-            // attract mode: the reference throw, again and again
-            if (session.phase === 'aim' && session.phaseClock > 0.8) {
-              session.setAim(session.level.reference.dvx, session.level.reference.dvy)
-              session.launch()
-            } else if ((session.phase === 'arrived' || session.phase === 'failed') && session.phaseClock > 2.5) session.reset()
-          } else {
+          if (!menu) {
             for (const e of events) handle(e, now)
-            if (resultAt > 0 && now >= resultAt && session.phase === 'arrived' && session.score) {
+            if (resultAt > 0 && now >= resultAt && session.phase === 'complete' && session.result) {
               resultAt = -1
-              store.finish(session.level.id, session.score)
+              store.finish({
+                missionId: session.mission.id,
+                stars: session.result.stars,
+                spent: session.result.spent,
+                spending: { ...session.spent },
+                hops: [...session.hopCosts],
+                days: Math.round(toDays(session.t)),
+              })
+            }
+            const fc = forecastHud()
+            // a chime when the forecast slides into a window
+            const nowInWindow = !!fc && fc.ratio !== null && fc.ratio <= WINDOW_RATIO && fc.affordable
+            if (nowInWindow && !inWindow) sfx.window()
+            inWindow = nowInWindow
+            if (session.phase === 'parked') {
+              const c = session.windowChart()
+              const key = `${session.mission.id}:${c.hopIndex}:${c.t0}`
+              if (store.chart?.key !== key) {
+                useCasual.setState({
+                  chart: { key, costs: Array.from(c.costs, (v) => toKms(v)), startDay: toDays(c.t0), spanDays: toDays(c.span) },
+                })
+              }
             }
             if (ms - lastHud > 90) {
               lastHud = ms
               store.setHud({
                 phase: session.phase,
-                dust: session.flight && session.phase !== 'aim' ? session.flight.collected.filter(Boolean).length : 0,
-                fuel: session.level.fuel > 0 ? (session.flight && session.phase !== 'aim' ? session.flight.fuelLeft : session.level.fuel) / session.level.fuel : 0,
-                speed: Math.round(session.phase === 'aim' ? 0 : session.speedKms() * 10) / 10,
+                hopIndex: session.hopIndex,
+                fuel: session.flight && session.phase === 'flight' ? session.flight.fuelLeft : session.fuel,
+                day: Math.floor(toDays(session.t)),
+                speed: Math.round(session.speedKms() * 10) / 10,
                 charging: !!session.charge,
                 failures: session.failures,
-                attempts: session.attempts,
+                forecast: fc,
               })
             }
           }
           input.showHint = !menu && store.hint
-          input.teach = !menu && !store.save.launched.includes(session.level.id) && session.attempts === 0
+          input.teach = !menu && !store.save.launched.includes(session.mission.id) && session.attempts === 0 && session.hopIndex === 0
           // panels move rarely: measuring them every frame would force a layout per frame
           if (ms - insetsAt > 250) {
             insetsAt = ms
@@ -465,7 +533,7 @@ export function Stage() {
 
   return (
     <div className="absolute inset-0">
-      <canvas ref={canvasRef} className="block h-full w-full" aria-label="Космос: оттяни корабль и отпусти" />
+      <canvas ref={canvasRef} className="block h-full w-full" aria-label="Космос: оттяни корабль и отпусти в окно старта" />
       {failed && (
         <div className="absolute inset-0 grid place-items-center p-6 text-center text-ink-2">
           Не удалось загрузить игру: {failed}
@@ -474,3 +542,5 @@ export function Stage() {
     </div>
   )
 }
+
+export { DECENT_RATIO, WINDOW_RATIO }

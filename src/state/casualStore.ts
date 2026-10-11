@@ -1,22 +1,37 @@
 import { create } from 'zustand'
 import { sfx } from '../game/casual/audio'
-import { CASUAL_LEVELS } from '../game/casual/levels'
-import { levelOpen, loadSave, storeSave, withResult, type SaveData } from '../game/casual/progress'
-import type { FlightScore } from '../game/casual/scoring'
+import { MISSIONS } from '../game/casual/levels'
+import { loadSave, missionOpen, storeSave, withResult, type SaveData } from '../game/casual/progress'
+import type { Spending } from '../game/casual/scoring'
 import type { Phase } from '../game/casual/session'
 
 export type Screen = 'menu' | 'play'
 
-/** Live flight readouts, pushed by the stage a few times a second. */
+/** What the aiming forecast says about the hop right now. */
+export interface ForecastHud {
+  /** Δv of the throw, model units */
+  launch: number
+  /** Δv the capture would take; null when the forecast misses the target */
+  capture: number | null
+  /** launch + capture, rounded once (null on a miss) */
+  total: number | null
+  /** launch + capture compared with the reference hop: ≤ 1.1 is a window */
+  ratio: number | null
+  affordable: boolean
+}
+
+/** Live readouts, pushed by the stage a few times a second. */
 export interface Hud {
   phase: Phase
-  dust: number
-  /** fuel left, 0…1 of the tank */
+  hopIndex: number
+  /** fuel left, model units */
   fuel: number
+  /** mission day */
+  day: number
   speed: number
   charging: boolean
   failures: number
-  attempts: number
+  forecast: ForecastHud | null
 }
 
 export interface Toast {
@@ -26,13 +41,26 @@ export interface Toast {
 }
 
 export interface Result {
-  levelId: string
-  score: FlightScore
+  missionId: string
+  stars: number
+  spent: number
+  spending: Spending
+  /** Δv each hop took */
+  hops: number[]
+  days: number
   newBest: boolean
   newStars: number
 }
 
-/** Speed jump shown next to the speedometer after a slingshot. */
+/** Launch windows ahead, for the chart under the tank (km/s per sample, days). */
+export interface Chart {
+  key: string
+  costs: number[]
+  startDay: number
+  spanDays: number
+}
+
+/** Speed jump shown next to the speedometer after a slingshot, or a capture's price. */
 export interface Gain {
   id: number
   kms: number
@@ -42,39 +70,45 @@ interface CasualState {
   screen: Screen
   levelId: string
   save: SaveData
-  /** `?all` in the address opens every level (testing, screenshots) */
+  /** `?all` in the address opens every mission (testing, screenshots) */
   unlockAll: boolean
   hud: Hud
   toast: Toast | null
   gain: Gain | null
   result: Result | null
   hint: boolean
-  /** bumps whenever the level should restart from aiming */
+  /** held ⏩: the parked clock runs fast */
+  fastForward: boolean
+  chart: Chart | null
+  /** bump to retry the current hop / the whole mission */
   restartTick: number
+  missionTick: number
 
   openLevel: (id: string) => void
   toMenu: () => void
   restart: () => void
+  restartMission: () => void
   next: () => void
   toggleMute: () => void
   toggleHint: () => void
+  setFastForward: (on: boolean) => void
   setHud: (hud: Partial<Hud>) => void
   showToast: (title: string, text: string) => void
   showGain: (kms: number) => void
   markLaunched: (id: string) => void
-  finish: (levelId: string, score: FlightScore) => void
+  finish: (result: Omit<Result, 'newBest' | 'newStars'>) => void
 }
 
 const initialSave = loadSave()
 sfx.setMuted(initialSave.muted)
 
-const freshHud = (): Hud => ({ phase: 'aim', dust: 0, fuel: 1, speed: 0, charging: false, failures: 0, attempts: 0 })
+const freshHud = (): Hud => ({ phase: 'parked', hopIndex: 0, fuel: 0, day: 0, speed: 0, charging: false, failures: 0, forecast: null })
 
 let toastId = 0
 
 export const useCasual = create<CasualState>((set, get) => ({
   screen: 'menu',
-  levelId: CASUAL_LEVELS[0].id,
+  levelId: MISSIONS[0].id,
   save: initialSave,
   unlockAll: typeof location !== 'undefined' && new URLSearchParams(location.search).has('all'),
   hud: freshHud(),
@@ -82,22 +116,27 @@ export const useCasual = create<CasualState>((set, get) => ({
   gain: null,
   result: null,
   hint: false,
+  fastForward: false,
+  chart: null,
   restartTick: 0,
+  missionTick: 0,
 
   openLevel: (id) => {
-    if (!levelOpen(get().save, id, get().unlockAll)) return
-    set({ screen: 'play', levelId: id, hud: freshHud(), toast: null, gain: null, result: null, hint: false })
+    if (!missionOpen(get().save, id, get().unlockAll)) return
+    set({ screen: 'play', levelId: id, hud: freshHud(), toast: null, gain: null, result: null, hint: false, fastForward: false, chart: null })
   },
 
-  toMenu: () => set({ screen: 'menu', result: null, toast: null, gain: null }),
+  toMenu: () => set({ screen: 'menu', result: null, toast: null, gain: null, fastForward: false }),
 
   restart: () => set((s) => ({ result: null, toast: null, gain: null, restartTick: s.restartTick + 1 })),
 
+  restartMission: () => set((s) => ({ result: null, toast: null, gain: null, missionTick: s.missionTick + 1 })),
+
   next: () => {
     const s = get()
-    const i = CASUAL_LEVELS.findIndex((l) => l.id === s.levelId)
-    const nextLevel = CASUAL_LEVELS[i + 1]
-    if (nextLevel && levelOpen(s.save, nextLevel.id, s.unlockAll)) s.openLevel(nextLevel.id)
+    const i = MISSIONS.findIndex((m) => m.id === s.levelId)
+    const nextMission = MISSIONS[i + 1]
+    if (nextMission && missionOpen(s.save, nextMission.id, s.unlockAll)) s.openLevel(nextMission.id)
     else s.toMenu()
   },
 
@@ -110,10 +149,14 @@ export const useCasual = create<CasualState>((set, get) => ({
 
   toggleHint: () => set((s) => ({ hint: !s.hint })),
 
+  setFastForward: (on) => {
+    if (get().fastForward !== on) set({ fastForward: on })
+  },
+
   setHud: (hud) => {
     const cur = get().hud
     const keys = Object.keys(hud) as (keyof Hud)[]
-    if (keys.every((k) => cur[k] === hud[k])) return
+    if (keys.every((k) => (k === 'forecast' ? sameForecast(cur.forecast, hud.forecast ?? null) : cur[k] === hud[k]))) return
     set({ hud: { ...cur, ...hud } })
   },
 
@@ -129,9 +172,14 @@ export const useCasual = create<CasualState>((set, get) => ({
     set({ save: next })
   },
 
-  finish: (levelId, score) => {
-    const { save, newBest, newStars } = withResult(get().save, levelId, score.stars, score.total)
+  finish: (r) => {
+    const { save, newBest, newStars } = withResult(get().save, r.missionId, r.stars, r.spent)
     storeSave(save)
-    set({ save, result: { levelId, score, newBest, newStars }, toast: null })
+    set({ save, result: { ...r, newBest, newStars }, toast: null, fastForward: false })
   },
 }))
+
+function sameForecast(a: ForecastHud | null, b: ForecastHud | null): boolean {
+  if (!a || !b) return a === b
+  return a.launch === b.launch && a.capture === b.capture && a.total === b.total && a.ratio === b.ratio && a.affordable === b.affordable
+}

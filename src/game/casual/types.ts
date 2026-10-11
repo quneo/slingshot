@@ -8,43 +8,58 @@ export interface Asteroid {
   sprite: number
 }
 
+/** One jump of a mission: from the planet the ship is parked at to the next one. */
+export interface Hop {
+  /** where the ship parks next */
+  to: BodyId
+  /** reaching this distance from the planet's centre counts as arrival */
+  zoneRadius: number
+  /** a flight longer than this (model time) is lost in space */
+  maxFlight: number
+  /** how far ahead the aiming forecast reaches, model time */
+  previewTime: number
+  /** model time per real second while parked before this hop: the clock the player waits on */
+  parkPace: number
+  /** cruise playback speed in flight, model time per real second */
+  flightPace: number
+  /** reference plan: launch `wait` after parking at the origin, with this throw (inertial Δv) */
+  reference: { wait: number; dvx: number; dvy: number }
+  /** the reference flight's time from launch to arrival, and its Δv (launch + capture) */
+  refFlight: number
+  refCost: number
+  /** framing while this hop is planned and flown */
+  view: { x: number; y: number; radius: number }
+}
+
 /**
- * One casual mission. The player launches from `home` with a pull of at most `power`, may fire boosts in flight
- * (each up to `boostMax`, together at most `fuel`), and should reach the ring around `target`. Three stardust
- * clouds lie on the reference route: collecting them all means flying the "cool" path.
+ * A mission: hop from planet to planet on one tank. The planets keep moving, so every hop has launch windows —
+ * moments when it is cheap. Fuel goes on launches, on captures (arriving faster than the target's escape speed)
+ * and on boosts in flight. Stars measure how close the total Δv came to the reference plan.
  */
-export interface CasualLevel {
+export interface Mission {
   id: string
   chapter: number
-  /** 1-based number across the whole campaign */
+  /** 1-based number across the campaign */
   number: number
   title: string
   /** what to do, in a few words */
   goal: string
-  /** shown while aiming in the first attempts */
+  /** shown while waiting for the first window */
   hint: string
   bodies: { id: BodyId; phaseDeg: number }[]
-  home: BodyId
-  target: { bodyId: BodyId; zoneRadius: number }
-  /** stardust positions in the star's frame (they do not move) */
-  stardust: [number, number][]
+  start: BodyId
+  hops: Hop[]
   asteroids: Asteroid[]
-  /** longest launch Δv the pull gives, model units */
-  power: number
-  /** total Δv of all in-flight boosts, model units (0 = no boosts) */
+  /** the tank: total Δv for the whole mission, model units */
   fuel: number
+  /** longest single throw */
+  power: number
   /** Δv of one fully charged boost */
   boostMax: number
-  /** how far ahead (model time) the aiming preview reaches */
-  previewTime: number
-  /** flight time of the reference route */
-  refTime: number
-  /** the attempt ends after this much flight time */
-  horizon: number
-  /** cruise playback speed: model time per real second */
-  pace: number
-  /** inertial launch Δv that collects all stardust and arrives (verified by tests) */
-  reference: { dvx: number; dvy: number }
-  /** aiming view */
-  view: { x: number; y: number; radius: number }
+  /** total Δv of the reference plan */
+  refCost: number
+  /** total Δv for three and for two stars */
+  stars: [number, number]
+  /** the whole mission must end before this model time (null = no deadline) */
+  deadline: number | null
 }
