@@ -1,5 +1,5 @@
 import { ChevronLeft, Lightbulb, RotateCcw, Sparkle, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import { sfx } from '../../game/casual/audio'
 import { getCasualLevel } from '../../game/casual/levels'
 import { cn } from '../../lib/utils'
@@ -8,6 +8,14 @@ import { Button } from '../components/button'
 
 /** failures before the hint button appears */
 const HINT_AFTER = 3
+
+/**
+ * After a mouse click the button gives focus back to the page: Space and Enter belong to the game (throw, boost),
+ * not to the last button clicked. Keyboard users (detail 0) keep their focus.
+ */
+const release = (e: MouseEvent<HTMLButtonElement>) => {
+  if (e.detail > 0) e.currentTarget.blur()
+}
 
 function DustSlots({ count }: { count: number }) {
   return (
@@ -120,7 +128,7 @@ export function Hud() {
             <Button
               variant="panel"
               size="icon"
-              onClick={() => { sfx.click(); toggleHint() }}
+              onClick={(e) => { release(e); sfx.click(); toggleHint() }}
               aria-label="Подсказка"
               aria-pressed={hint}
               className={cn(hint && 'border-gold/70 text-gold')}
@@ -128,10 +136,10 @@ export function Hud() {
               <Lightbulb size={19} />
             </Button>
           )}
-          <Button variant="panel" size="icon" onClick={() => { sfx.click(); restart() }} aria-label="Заново (R)">
+          <Button variant="panel" size="icon" onClick={(e) => { release(e); sfx.click(); restart() }} aria-label="Заново (R)">
             <RotateCcw size={19} />
           </Button>
-          <Button variant="panel" size="icon" onClick={() => { sfx.unlock(); toggleMute() }} aria-label={muted ? 'Включить звук' : 'Выключить звук'}>
+          <Button variant="panel" size="icon" onClick={(e) => { release(e); sfx.unlock(); toggleMute() }} aria-label={muted ? 'Включить звук' : 'Выключить звук'}>
             {muted ? <VolumeX size={19} /> : <Volume2 size={19} />}
           </Button>
         </div>

@@ -1,6 +1,6 @@
 import type { StateVector } from '../physics/ephemeris'
 import { findSampleIndex, newSample, sampleTrajectory, SAMPLE_STRIDE, type ShipSample } from '../physics/interpolate'
-import { departureRadius, propagate, type FlybyRecord, type PropagationResult } from '../physics/propagate'
+import { departureRadius, propagate, type ApproachPoint, type FlybyRecord, type PropagationResult } from '../physics/propagate'
 import { bodyState } from '../physics/system'
 import type { CasualLevel } from './types'
 import { buildWorld, launchFrom, type CasualWorld } from './world'
@@ -10,11 +10,18 @@ export const ESCAPE_RADIUS = 9.5
 export const STARDUST_RADIUS = 0.13
 /** a boost is never weaker than this share of a full charge (a quick tap) */
 export const MIN_CHARGE = 0.15
+/**
+ * Longest integrator step, model time. Close passes are still resolved finely (the step is also limited by the
+ * distance to every body); this only sets how coarse the cruise is, i.e. the cost of a forecast on a phone.
+ */
+export const MAX_STEP = 0.08
 
 /** One ballistic stretch of the flight: from launch or from a boost until the next boost or the end. */
 export interface Segment {
   t0: number
   result: PropagationResult
+  /** still leaving the home planet: it neither pulls nor stops the ship until the ship is clear of it */
+  departing: boolean
 }
 
 export type EndReason = 'arrived' | 'crashed' | 'lost' | 'timeout'
@@ -32,6 +39,8 @@ function segmentEnd(seg: Segment): FlightEnd {
     r.endReason === 'arrived' ? 'arrived' : r.endReason === 'collision' ? 'crashed' : r.endReason === 'escaped' ? 'lost' : 'timeout'
   return { reason, t: r.endTime, bodyIndex: r.endBodyIndex }
 }
+
+const approachOf = (a: ApproachPoint): ApproachPoint => ({ t: a.t, distance: a.distance, relSpeed: a.relSpeed, x: a.x, y: a.y })
 
 /**
  * A live flight: the same honest propagator, re-run from the current state every time the player boosts.
@@ -52,7 +61,7 @@ export class Flight {
   ) {
     this.world = world ?? buildWorld(level)
     this.collected = level.stardust.map(() => false)
-    this.segments.push({ t0: 0, result: this.fly(0, launchFrom(this.world, launch.dvx, launch.dvy)) })
+    this.segments.push({ t0: 0, result: this.fly(0, launchFrom(this.world, launch.dvx, launch.dvy), true), departing: true })
   }
 
   /** Δv still in the tank, model units */
@@ -93,11 +102,8 @@ export class Flight {
     return sampleTrajectory(seg.result.samples, seg.result.sampleCount, Math.min(t, seg.result.endTime), out)
   }
 
-  private fly(t0: number, state0: StateVector, tEnd = this.level.horizon): PropagationResult {
+  private fly(t0: number, state0: StateVector, departing: boolean, tEnd = this.level.horizon): PropagationResult {
     const { system, homeIndex, targetIndex } = this.world
-    const home = bodyState(system, homeIndex, t0)
-    // still inside the launch planet's well (boost right after launch): keep the departure rules
-    const nearHome = Math.hypot(state0.x - home.x, state0.y - home.y) < departureRadius(system.bodies[homeIndex])
     return propagate({
       system,
       t0,
@@ -106,9 +112,33 @@ export class Flight {
       tEnd,
       target: { bodyIndex: targetIndex, zoneRadius: this.level.target.zoneRadius, maxRelSpeed: null },
       escapeRadius: ESCAPE_RADIUS,
-      departureBodyIndex: nearHome ? homeIndex : null,
-      maxStep: 0.03,
+      departureBodyIndex: departing ? homeIndex : null,
+      maxStep: MAX_STEP,
     })
+  }
+
+  /**
+   * A boost right after the launch, while the ship is still inside the home planet's departure radius, keeps the
+   * departure rules. Once the ship has been clear of the planet, it is an ordinary body again — even if the ship
+   * comes back to it later (otherwise a boost there would switch its gravity and surface off).
+   */
+  private stillDeparting(t: number): boolean {
+    const seg = this.segmentAt(t)
+    if (!seg.departing) return false
+    const { system, homeIndex } = this.world
+    const limit = departureRadius(system.bodies[homeIndex])
+    const r = seg.result
+    const clear = (x: number, y: number, tk: number) => {
+      const p = bodyState(system, homeIndex, tk)
+      return Math.hypot(x - p.x, y - p.y) >= limit
+    }
+    for (let k = 0; k < r.sampleCount; k++) {
+      const tk = r.samples[k * SAMPLE_STRIDE]
+      if (tk > t) break
+      if (clear(r.samples[k * SAMPLE_STRIDE + 1], r.samples[k * SAMPLE_STRIDE + 2], tk)) return false
+    }
+    const s = this.stateAt(t, newSample())
+    return !clear(s.x, s.y, t)
   }
 
   /** Fires a boost of `charge` (0…1) at time t towards (dirX, dirY) (any length). Returns false when not possible. */
@@ -120,14 +150,15 @@ export class Flight {
     const dvy = st.vy - before.vy
     this.fuelUsed += Math.hypot(dvx, dvy)
     this.boostsUsed.push({ t, dvx, dvy })
-    this.segments.push({ t0: t, result: this.fly(t, st) })
+    const departing = this.stillDeparting(t)
+    this.segments.push({ t0: t, result: this.fly(t, st, departing), departing })
     return true
   }
 
   /** Where the flight would go after such a boost, for the charging preview (up to `until`). */
   previewBoost(t: number, dirX: number, dirY: number, charge: number, until: number): PropagationResult | null {
     const st = this.boostState(t, dirX, dirY, charge)
-    return st ? this.fly(t, st, Math.min(this.level.horizon, t + until)) : null
+    return st ? this.fly(t, st, this.stillDeparting(t), Math.min(this.level.horizon, t + until)) : null
   }
 
   /**
@@ -147,19 +178,22 @@ export class Flight {
       carry = []
       for (const f of seg.result.flybys) {
         if (f.tIn > until) continue
-        let rec: FlybyRecord = { ...f }
+        const cut = !!next && f.tOut > until
+        // the closest approach counts only along the part actually flown: past the boost the segment's
+        // prediction never happened
+        const near: ApproachPoint = cut ? this.closestBetween(seg, f.bodyIndex, Math.max(seg.t0, f.tIn), until) : f
+        let rec: FlybyRecord = { ...f, ...approachOf(near) }
         const k = incoming.findIndex((p) => p.bodyIndex === f.bodyIndex)
         if (k >= 0 && f.tIn <= seg.t0 + 0.05) {
           const p = incoming.splice(k, 1)[0]
-          const closer = p.distance < f.distance ? p : f
           rec = {
-            ...f,
-            t: closer.t, distance: closer.distance, relSpeed: closer.relSpeed, x: closer.x, y: closer.y,
+            ...rec,
+            ...approachOf(p.distance < near.distance ? p : near),
             tIn: p.tIn, speedIn: p.speedIn, energyIn: p.energyIn, vxIn: p.vxIn, vyIn: p.vyIn,
             burnEnergy: p.burnEnergy + f.burnEnergy, burnDvx: p.burnDvx + f.burnDvx, burnDvy: p.burnDvy + f.burnDvy,
           }
         }
-        if (next && rec.tOut > until) {
+        if (cut) {
           const b = this.boostsUsed[i]
           const s = sampleTrajectory(seg.result.samples, seg.result.sampleCount, until, newSample())
           const before = energy(s.x, s.y, s.vx, s.vy)
@@ -177,6 +211,27 @@ export class Flight {
     })
     out.push(...carry)
     return out.sort((a, b) => a.tIn - b.tIn)
+  }
+
+  /** Closest approach of a segment's path to a body between t0 and t1 (samples plus both ends). */
+  private closestBetween(seg: Segment, bodyIndex: number, t0: number, t1: number): ApproachPoint {
+    const sys = this.world.system
+    const r = seg.result
+    const st = newSample()
+    let best: ApproachPoint = { t: t0, distance: Infinity, relSpeed: 0, x: 0, y: 0 }
+    const consider = (t: number) => {
+      sampleTrajectory(r.samples, r.sampleCount, t, st)
+      const p = bodyState(sys, bodyIndex, t)
+      const d = Math.hypot(st.x - p.x, st.y - p.y)
+      if (d < best.distance) best = { t, distance: d, relSpeed: Math.hypot(st.vx - p.vx, st.vy - p.vy), x: st.x, y: st.y }
+    }
+    consider(t0)
+    for (let k = 0; k < r.sampleCount; k++) {
+      const tk = r.samples[k * SAMPLE_STRIDE]
+      if (tk > t0 && tk < t1) consider(tk)
+    }
+    consider(t1)
+    return best
   }
 
   /** Picks up stardust touched between t0 and t1; returns the indices collected now. */
@@ -216,7 +271,7 @@ export function previewPath(level: CasualLevel, world: CasualWorld, dvx: number,
     target: { bodyIndex: world.targetIndex, zoneRadius: level.target.zoneRadius, maxRelSpeed: null },
     escapeRadius: ESCAPE_RADIUS,
     departureBodyIndex: world.homeIndex,
-    maxStep: 0.03,
+    maxStep: MAX_STEP,
   })
 }
 

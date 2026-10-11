@@ -83,7 +83,7 @@ export class CasualRenderer {
   /** model time the planets are drawn at: follows the flight, rewinds to 0 for the next aim */
   private shownT = 0
   private lastBoostAt = -10
-  private arrival: { attempt: number; angle: number; dir: number } | null = null
+  private arrival: { session: Session; attempt: number; angle: number; dir: number } | null = null
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -650,9 +650,9 @@ export class CasualRenderer {
     if (s.phase === 'arrived') {
       // parks on a little orbit around the target: a victory lap
       const b = bodies[s.world.targetIndex]
-      if (this.arrival?.attempt !== s.attempts) {
+      if (this.arrival?.session !== s || this.arrival.attempt !== s.attempts) {
         const cross = (x - b.x) * -st.vy - (y - b.y) * st.vx
-        this.arrival = { attempt: s.attempts, angle: Math.atan2(y - b.y, x - b.x), dir: cross > 0 ? -1 : 1 }
+        this.arrival = { session: s, attempt: s.attempts, angle: Math.atan2(y - b.y, x - b.x), dir: cross > 0 ? -1 : 1 }
       }
       const R = Math.max(b.r * 2, 24)
       const a = this.arrival.angle + this.arrival.dir * s.phaseClock * 2.4

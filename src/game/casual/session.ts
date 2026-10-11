@@ -1,4 +1,4 @@
-import { newSample, SAMPLE_STRIDE, type ShipSample } from '../physics/interpolate'
+import { newSample, SAMPLE_STRIDE, sampleTrajectory, type ShipSample } from '../physics/interpolate'
 import type { FlybyRecord, PropagationResult } from '../physics/propagate'
 import { bodyState } from '../physics/system'
 import { toKms } from '../physics/units'
@@ -85,7 +85,8 @@ export class Session {
   /** The start of the path for the current pull (cached). */
   preview(): PropagationResult | null {
     if (!this.aim) return null
-    const key = `${this.aim.dvx.toFixed(6)},${this.aim.dvy.toFixed(6)}`
+    const q = this.level.power / 1500
+    const key = `${Math.round(this.aim.dvx / q)},${Math.round(this.aim.dvy / q)}`
     if (this.previewCache?.key !== key) {
       this.previewCache = { key, result: previewPath(this.level, this.world, this.aim.dvx, this.aim.dvy, this.level.previewTime) }
     }
@@ -155,7 +156,10 @@ export class Session {
     const c = this.charge
     const f = this.flight
     if (!c || !f) return null
-    const key = `${this.t.toFixed(5)},${c.dirX.toFixed(4)},${c.dirY.toFixed(4)},${this.chargeLevel.toFixed(3)}`
+    // coarse key: the look-ahead is recomputed a few times a second, not every frame (a phone can't afford that);
+    // steps of 1/24 charge, ½° and a sliver of flight time are below what the eye can tell apart
+    const angle = Math.round((Math.atan2(c.dirY, c.dirX) * 180) / Math.PI / 0.5)
+    const key = `${Math.floor(this.t / (this.level.pace * 0.02))},${angle},${Math.round(this.chargeLevel * 24)}`
     if (this.chargeCache?.key !== key) {
       this.chargeCache = { key, result: f.previewBoost(this.t, c.dirX, c.dirY, this.chargeLevel, this.level.previewTime * 0.6) }
     }
@@ -288,22 +292,40 @@ export class Session {
     return s ? toKms(Math.hypot(s.vx, s.vy)) : 0
   }
 
-  /** The path flown so far as x,y pairs (segments cut at the boosts). */
+  /** The path flown so far as x,y pairs (segments cut at the boosts), filled in between coarse cruise steps. */
   flownPath(): Float32Array {
     const f = this.flight
     if (!f) return new Float32Array(0)
     const pts: number[] = []
+    const st = newSample()
+    const gap = 0.015
     f.segments.forEach((seg, i) => {
-      const until = Math.min(i + 1 < f.segments.length ? f.segments[i + 1].t0 : Infinity, this.t)
       const r = seg.result
+      const until = Math.min(i + 1 < f.segments.length ? f.segments[i + 1].t0 : Infinity, this.t, r.endTime)
+      if (until < seg.t0) return
+      let prevT = NaN
+      let prevX = 0
+      let prevY = 0
+      // long cruise steps: points along the interpolating cubic keep the trail a curve
+      const add = (t: number, x: number, y: number) => {
+        const n = Number.isNaN(prevT) ? 0 : Math.floor(Math.hypot(x - prevX, y - prevY) / gap)
+        for (let j = 1; j <= n; j++) {
+          sampleTrajectory(r.samples, r.sampleCount, prevT + ((t - prevT) * j) / (n + 1), st)
+          pts.push(st.x, st.y)
+        }
+        pts.push(x, y)
+        prevT = t
+        prevX = x
+        prevY = y
+      }
       for (let k = 0; k < r.sampleCount; k++) {
         const tk = r.samples[k * SAMPLE_STRIDE]
-        if (tk > until) break
-        pts.push(r.samples[k * SAMPLE_STRIDE + 1], r.samples[k * SAMPLE_STRIDE + 2])
+        if (tk >= until) break
+        add(tk, r.samples[k * SAMPLE_STRIDE + 1], r.samples[k * SAMPLE_STRIDE + 2])
       }
+      sampleTrajectory(r.samples, r.sampleCount, until, st)
+      add(until, st.x, st.y)
     })
-    const s = f.stateAt(this.t, newSample())
-    pts.push(s.x, s.y)
     return new Float32Array(pts)
   }
 

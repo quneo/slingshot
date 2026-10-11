@@ -5,7 +5,7 @@
  */
 import { writeFileSync } from 'node:fs'
 import { CATALOG, STAR_MU, type BodyId } from '../src/game/levels/catalog'
-import { Flight, previewPath } from '../src/game/casual/sim'
+import { Flight, MAX_STEP, previewPath } from '../src/game/casual/sim'
 import type { Asteroid, CasualLevel } from '../src/game/casual/types'
 import { buildWorld, launchFrom } from '../src/game/casual/world'
 import { SAMPLE_STRIDE, newSample, sampleTrajectory } from '../src/game/physics/interpolate'
@@ -309,7 +309,7 @@ function fly(level: CasualLevel, dv: { dvx: number; dvy: number }, withTarget: b
     target: withTarget ? { bodyIndex: world.targetIndex, zoneRadius: level.target.zoneRadius, maxRelSpeed: null } : null,
     escapeRadius: 9.5,
     departureBodyIndex: world.homeIndex,
-    maxStep: 0.03,
+    maxStep: MAX_STEP,
   })
 }
 

@@ -108,6 +108,18 @@ test('holding a finger in flight charges a boost that spends fuel', async ({ pag
   expect(left).toBeLessThan(full - 1e-6)
 })
 
+test('the keyboard can aim and throw', async ({ page }, info) => {
+  test.skip(info.project.name === 'phone', 'keyboard play is a desktop feature')
+  await page.goto('/')
+  await page.getByRole('button', { name: /Миссия 1: Первый бросок/ }).click()
+  await settled(page)
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('Space')
+  await expect(page.getByTestId('speed')).toBeVisible()
+  const phase = await page.evaluate(() => (globalThis as Debug).__session().phase)
+  expect(phase).not.toBe('aim')
+})
+
 test('sound can be switched off and stays off', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Выключить звук' }).click()

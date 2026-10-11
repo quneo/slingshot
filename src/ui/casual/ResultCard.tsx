@@ -48,7 +48,8 @@ export function ResultCard() {
   useEffect(() => {
     if (!result) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') next()
+      // a focused button handles Enter itself ("Ещё раз" must not mean "Дальше")
+      if (e.key === 'Enter' && !(e.target as HTMLElement | null)?.closest?.('button')) next()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

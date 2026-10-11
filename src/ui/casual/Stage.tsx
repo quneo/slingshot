@@ -76,6 +76,19 @@ export function Stage() {
         let lastStretch = 0
         let drag: { id: number; x0: number; y0: number; history: { t: number; x: number; y: number }[] } | null = null
         let chargeId: number | null = null
+        /** keyboard boost being held (Space), turned from the ship's heading by ←/→ */
+        let keyCharge = false
+        let keyTurn = 0
+        let lastPhase = session.phase
+        let insetsAt = -Infinity
+
+        const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
+        const syncMotion = () => {
+          fx.calm = motion.matches
+        }
+        syncMotion()
+        motion.addEventListener('change', syncMotion)
+        cleanups.push(() => motion.removeEventListener('change', syncMotion))
 
         const resize = () => {
           const parent = canvas.parentElement!
@@ -101,6 +114,7 @@ export function Stage() {
           resultAt = -1
           drag = null
           chargeId = null
+          keyCharge = false
           input.pull = null
           sfx.chargeStop()
         }
@@ -137,6 +151,8 @@ export function Stage() {
 
         const onDown = (e: PointerEvent) => {
           sfx.unlock()
+          // the main button only: right-click is not a throw, and on some systems its release never arrives
+          if (e.pointerType === 'mouse' && e.button !== 0) return
           if (menu || useCasual.getState().result) return
           const p = local(e)
           if (session.phase === 'failed') session.reset()
@@ -144,7 +160,7 @@ export function Stage() {
             capture(e.pointerId)
             drag = { id: e.pointerId, x0: p.x, y0: p.y, history: [{ t: performance.now(), x: p.x, y: p.y }] }
             aimFromPull(0, 0)
-          } else if (session.phase === 'flight' && chargeId === null) {
+          } else if (session.phase === 'flight' && chargeId === null && !keyCharge) {
             const d = worldDir(p.x, p.y)
             if (session.startCharge(d.x, d.y)) {
               capture(e.pointerId)
@@ -201,25 +217,110 @@ export function Stage() {
         const onLeave = () => {
           input.hover = null
         }
+        const onMenu = (e: Event) => e.preventDefault()
+        /** the window lost focus mid-gesture: drop it rather than throw or boost blindly */
+        const onBlur = () => {
+          if (drag) onCancel(new PointerEvent('pointercancel', { pointerId: drag.id }))
+          if (chargeId !== null) onCancel(new PointerEvent('pointercancel', { pointerId: chargeId }))
+          if (keyCharge) {
+            keyCharge = false
+            session.cancelCharge()
+            sfx.chargeStop()
+          }
+        }
+
+        // ── keyboard: ←/→ turn and ↑/↓ stretch the throw, Space throws; in flight hold Space to boost
+        const DEG = Math.PI / 180
+        const keyDir = () => {
+          const st = session.ship()
+          if (!st) return null
+          const a = Math.atan2(st.vy, st.vx) + keyTurn
+          return { x: Math.cos(a), y: Math.sin(a) }
+        }
+        const onKeyDown = (e: KeyboardEvent) => {
+          if (menu || useCasual.getState().result || drag) return
+          if ((e.target as HTMLElement | null)?.closest?.('button, input, textarea, a')) return
+          const arrow = e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown'
+          const step = e.shiftKey ? 5 : 1
+          if (arrow && (session.phase === 'aim' || session.phase === 'failed')) {
+            e.preventDefault()
+            sfx.unlock()
+            if (session.phase === 'failed') session.reset()
+            const power = session.level.power
+            let aim = session.aim
+            if (!aim) {
+              const home = bodyState(session.world.system, session.world.homeIndex, 0)
+              const len = Math.hypot(home.vx, home.vy)
+              aim = { dvx: (home.vx / len) * power * 0.5, dvy: (home.vy / len) * power * 0.5 }
+            }
+            let ang = Math.atan2(aim.dvy, aim.dvx)
+            let mag = Math.hypot(aim.dvx, aim.dvy)
+            if (e.key === 'ArrowLeft') ang += step * DEG
+            if (e.key === 'ArrowRight') ang -= step * DEG
+            if (e.key === 'ArrowUp') mag = Math.min(power, mag + power * 0.02 * step)
+            if (e.key === 'ArrowDown') mag = Math.max(power * 0.1, mag - power * 0.02 * step)
+            session.setAim(Math.cos(ang) * mag, Math.sin(ang) * mag)
+            input.pull = { x: (-Math.cos(ang) * mag * input.maxPull) / power, y: (Math.sin(ang) * mag * input.maxPull) / power }
+            sfx.stretch(mag / power)
+          } else if ((e.key === ' ' || e.key === 'Enter') && session.phase === 'aim' && session.aim && !e.repeat) {
+            e.preventDefault()
+            if (session.launch()) useCasual.getState().markLaunched(session.level.id)
+            input.pull = null
+          } else if (e.key === ' ' && session.phase === 'flight' && !e.repeat && !keyCharge && chargeId === null) {
+            e.preventDefault()
+            keyTurn = 0
+            const d = keyDir()
+            if (d && session.startCharge(d.x, d.y)) {
+              keyCharge = true
+              sfx.chargeStart()
+            }
+          } else if (keyCharge && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+            e.preventDefault()
+            keyTurn += (e.key === 'ArrowLeft' ? 1 : -1) * 15 * DEG
+          } else if (e.key === ' ') e.preventDefault()
+        }
+        const onKeyUp = (e: KeyboardEvent) => {
+          if (e.key !== ' ' || !keyCharge) return
+          keyCharge = false
+          if (!session.releaseCharge()) sfx.chargeStop()
+        }
+
         canvas.addEventListener('pointerdown', onDown)
         canvas.addEventListener('pointermove', onMove)
         canvas.addEventListener('pointerup', onUp)
         canvas.addEventListener('pointercancel', onCancel)
+        canvas.addEventListener('lostpointercapture', onCancel)
         canvas.addEventListener('pointerleave', onLeave)
+        canvas.addEventListener('contextmenu', onMenu)
+        window.addEventListener('blur', onBlur)
+        window.addEventListener('keydown', onKeyDown)
+        window.addEventListener('keyup', onKeyUp)
         cleanups.push(() => {
           canvas.removeEventListener('pointerdown', onDown)
           canvas.removeEventListener('pointermove', onMove)
           canvas.removeEventListener('pointerup', onUp)
           canvas.removeEventListener('pointercancel', onCancel)
+          canvas.removeEventListener('lostpointercapture', onCancel)
           canvas.removeEventListener('pointerleave', onLeave)
+          canvas.removeEventListener('contextmenu', onMenu)
+          window.removeEventListener('blur', onBlur)
+          window.removeEventListener('keydown', onKeyDown)
+          window.removeEventListener('keyup', onKeyUp)
         })
 
         // ── what happened → particles, captions, sounds
+        /** the flight ended under a held finger or key: silence the charge, forget the gesture */
+        const stopCharging = () => {
+          chargeId = null
+          keyCharge = false
+          sfx.chargeStop()
+        }
         const handle = (e: GameEvent, now: number) => {
           const zoom = renderer.camera.zoom
           const store = useCasual.getState()
           switch (e.kind) {
             case 'launch': {
+              useCasual.setState({ gain: null })
               sfx.launch(e.power)
               sfx.buzz(15)
               fx.kick(3 + e.power * 5)
@@ -265,6 +366,7 @@ export function Stage() {
               break
             }
             case 'arrived':
+              stopCharging()
               sfx.arrive()
               sfx.buzz([30, 60, 30, 60, 60])
               fx.flashOnce(0.9)
@@ -278,6 +380,7 @@ export function Stage() {
               resultAt = now + RESULT_DELAY
               break
             case 'failed': {
+              stopCharging()
               const t = failureText(session, e)
               if (e.reason === 'crashed') {
                 sfx.crash()
@@ -301,8 +404,18 @@ export function Stage() {
           const dt = Math.min(0.05, Math.max(0, (ms - last) / 1000))
           last = ms
           const store = useCasual.getState()
+          if (keyCharge) {
+            const d = keyDir()
+            if (d) session.aimCharge(d.x, d.y)
+          }
           session.update(dt)
           const events = session.drain()
+          // a new attempt starts clean: no speed gain left over from the last one, no keyboard band
+          if (session.phase === 'aim' && lastPhase !== 'aim') {
+            if (useCasual.getState().gain) useCasual.setState({ gain: null })
+            if (!drag) input.pull = null
+          }
+          lastPhase = session.phase
           if (menu) {
             // attract mode: the reference throw, again and again
             if (session.phase === 'aim' && session.phaseClock > 0.8) {
@@ -330,7 +443,11 @@ export function Stage() {
           }
           input.showHint = !menu && store.hint
           input.teach = !menu && !store.save.launched.includes(session.level.id) && session.attempts === 0
-          renderer.camera.insets = measureInsets()
+          // panels move rarely: measuring them every frame would force a layout per frame
+          if (ms - insetsAt > 250) {
+            insetsAt = ms
+            renderer.camera.insets = measureInsets()
+          }
           renderer.render(session, input, now, dt, menu)
         }
         raf = requestAnimationFrame(frame)

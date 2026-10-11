@@ -47,6 +47,8 @@ export class Fx {
   shake = 0
   flash = 0
   flashColor = '255, 210, 122'
+  /** prefers-reduced-motion: no shake, softer flashes */
+  calm = false
   private seed = 987654
 
   private rnd(): number {
@@ -80,11 +82,12 @@ export class Fx {
   }
 
   kick(px: number): void {
+    if (this.calm) return
     this.shake = Math.max(this.shake, px)
   }
 
   flashOnce(strength: number, rgb = '255, 210, 122'): void {
-    this.flash = Math.max(this.flash, strength)
+    this.flash = Math.max(this.flash, this.calm ? strength * 0.3 : strength)
     this.flashColor = rgb
   }
 
