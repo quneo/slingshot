@@ -105,6 +105,10 @@
   .num {
     font-variant-numeric: tabular-nums;
   }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--color-line) 90%, transparent) transparent;
+  }
   .hairline {
     border-color: color-mix(in srgb, var(--color-line) 80%, transparent);
   }

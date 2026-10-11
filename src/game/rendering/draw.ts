@@ -291,7 +291,8 @@ export function drawStar(
   const spin = calm ? 0 : timeSec * 0.02
   ctx.translate(x, y)
   ctx.rotate(spin)
-  ctx.drawImage(surface, -r * 1.02, -r * 1.02, r * 2.04, r * 2.04)
+  // the sprite's dark limb would read as a ring against the glow: crop it away
+  ctx.drawImage(surface, -r * 1.14, -r * 1.14, r * 2.28, r * 2.28)
   ctx.restore()
 }
 

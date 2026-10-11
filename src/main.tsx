@@ -16,9 +16,5 @@ createRoot(document.getElementById('root')!).render(
 
 if (import.meta.env.DEV) {
   // handy for manual testing in devtools
-  void Promise.all([import('./state/gameStore'), import('./ui/sceneBridge'), import('./state/flightClock')]).then(
-    ([store, bridge, clock]) => {
-      Object.assign(window, { __game: store.useGame, __scene: bridge.sceneBridge, __clock: clock.flightClock })
-    },
-  )
+  void import('./state/casualStore').then(({ useCasual }) => Object.assign(window, { __casual: useCasual }))
 }

@@ -1,5 +1,6 @@
 /**
- * The fictional training system «Лира». Values are in model units (see physics/units.ts).
+ * The fictional system «Лира». In the casual branch the giants are heavier than in the classic game, so that
+ * a slingshot bends the path visibly on screen. Values are in model units (see physics/units.ts).
  * Radii are physical collision radii of this made-up system, not the Solar System.
  */
 
@@ -69,7 +70,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     id: 'colossus',
     name: 'Колосс',
     blurb: 'Газовый гигант. Его гравитация разгоняет и тормозит корабли.',
-    mu: 0.01,
+    mu: 0.022,
     radius: 0.13,
     orbitRadius: 2.6,
     visual: { sprite: 'planet-colossus', color: '#FFB64D', enlarge: 1.1 },
@@ -78,7 +79,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     id: 'aurum',
     name: 'Аурум',
     blurb: 'Окольцованный гигант. Кольца не опасны, опасна сама планета.',
-    mu: 0.004,
+    mu: 0.01,
     radius: 0.1,
     orbitRadius: 4.0,
     visual: { sprite: 'planet-aurum', color: '#F3D58B', rings: true, enlarge: 1.3 },
@@ -87,7 +88,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     id: 'borey',
     name: 'Борей',
     blurb: 'Ледяной гигант на окраине системы.',
-    mu: 0.0025,
+    mu: 0.006,
     radius: 0.085,
     orbitRadius: 5.6,
     visual: { sprite: 'planet-borey', color: '#7FE3F0', enlarge: 1.4 },
@@ -96,7 +97,7 @@ export const CATALOG: Record<BodyId, CatalogBody> = {
     id: 'viola',
     name: 'Виола',
     blurb: 'Далёкий фиолетовый мир за орбитой Борея.',
-    mu: 0.0008,
+    mu: 0.002,
     radius: 0.07,
     orbitRadius: 7.2,
     visual: { sprite: 'planet-viola', color: '#B79CFF', enlarge: 1.6 },
